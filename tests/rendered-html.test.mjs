@@ -5,6 +5,8 @@ import test from "node:test";
 const pageUrl = new URL("../app/page.tsx", import.meta.url);
 const cssUrl = new URL("../app/globals.css", import.meta.url);
 const tripsApiUrl = new URL("../app/api/trips/route.ts", import.meta.url);
+const tripApiUrl = new URL("../app/api/trips/[id]/route.ts", import.meta.url);
+const tripScaffoldUrl = new URL("../app/trip-scaffold.ts", import.meta.url);
 const templatesApiUrl = new URL("../app/api/packing-templates/route.ts", import.meta.url);
 
 test("ships the trip library and editable planning surfaces", async () => {
@@ -20,7 +22,11 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Needs packing/);
   assert.match(page, /Add section/);
   assert.match(page, /Apply template/);
-  assert.match(page, /Packing template admin/);
+  assert.match(page, /Trip Admin/);
+  assert.match(page, /Packing Templates/);
+  assert.match(page, /reseedTrip/);
+  assert.match(page, /deleteTrip/);
+  assert.match(page, /Start with packing template/);
   assert.match(page, /defaultPackingTemplates/);
   assert.match(page, /applyPackingTemplate/);
   assert.match(page, /quick-add-item/);
@@ -91,6 +97,9 @@ test("responsive visual system includes mobile navigation", async () => {
   assert.match(css, /\.add-section-panel/);
   assert.match(css, /\.template-apply-panel/);
   assert.match(css, /\.admin-page/);
+  assert.match(css, /\.admin-tabs/);
+  assert.match(css, /\.trip-admin-card/);
+  assert.match(css, /\.danger-button/);
   assert.match(css, /\.template-admin-card/);
   assert.match(css, /\.quick-add-item/);
   assert.match(css, /\.quick-add-button/);
@@ -110,13 +119,19 @@ test("responsive visual system includes mobile navigation", async () => {
 
 test("new trips keep trip-owned packing and central templates", async () => {
   const tripsApi = await readFile(tripsApiUrl, "utf8");
+  const tripApi = await readFile(tripApiUrl, "utf8");
+  const tripScaffold = await readFile(tripScaffoldUrl, "utf8");
   const templatesApi = await readFile(templatesApiUrl, "utf8");
 
   assert.match(tripsApi, /const blankTripData = \{\s+days: \[\],\s+checklist: \[\],/);
   assert.match(tripsApi, /createItineraryDaysFromDateRange/);
-  assert.match(tripsApi, /Arrival \/ travel day/);
-  assert.match(tripsApi, /Departure \/ travel day/);
+  assert.match(tripScaffold, /Arrival \/ travel day/);
+  assert.match(tripScaffold, /Departure \/ travel day/);
   assert.match(tripsApi, /days: createItineraryDaysFromDateRange\(dateRange\)/);
+  assert.match(tripsApi, /applyPackingTemplateToTripData/);
+  assert.match(tripApi, /payload\.reseed/);
+  assert.match(tripApi, /export async function DELETE/);
+  assert.match(tripApi, /Keep at least one trip/);
   assert.match(tripsApi, /packingGroups: \[\]/);
   assert.match(tripsApi, /hasCopiedStarterChecklist/);
   assert.match(tripsApi, /A new trip shell using the Burns Travel framework/);

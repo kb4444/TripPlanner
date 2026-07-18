@@ -17,8 +17,9 @@ export const metadata: Metadata = {
   description:
     "A reusable family trip planner, seeded with the Michigan Lake Week itinerary.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: [{ url: "/favicon.png", type: "image/png" }],
+    shortcut: "/favicon.png",
+    apple: "/app-logo.png",
   },
   openGraph: {
     title: "Burns Travel Planner",

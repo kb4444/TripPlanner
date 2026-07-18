@@ -15,7 +15,6 @@ import {
   ClipboardCheck,
   Copy,
   Clock3,
-  Compass,
   Edit3,
   Eye,
   EyeOff,
@@ -881,7 +880,9 @@ export default function Home() {
   const [mobileNav, setMobileNav] = useState(false);
   const [showNewTrip, setShowNewTrip] = useState(false);
   const [showTripSettings, setShowTripSettings] = useState(false);
-  const [newTrip, setNewTrip] = useState({ title: "", destination: "", dateRange: "" });
+  const [adminTab, setAdminTab] = useState<"trips" | "templates">("trips");
+  const [reseedTemplateId, setReseedTemplateId] = useState("");
+  const [newTrip, setNewTrip] = useState({ title: "", destination: "", dateRange: "", packingTemplateId: "" });
   const [draggingAgendaIndex, setDraggingAgendaIndex] = useState<number | null>(null);
   const [draggingChecklistIndex, setDraggingChecklistIndex] = useState<number | null>(null);
   const autosaveReady = useRef(false);
@@ -981,6 +982,8 @@ export default function Home() {
   const selectedPackingTemplate =
     packingTemplates.find((template) => template.id === selectedPackingTemplateId) ??
     packingTemplates[0];
+  const selectedNewTripTemplate = packingTemplates.find((template) => template.id === newTrip.packingTemplateId);
+  const selectedReseedTemplate = packingTemplates.find((template) => template.id === reseedTemplateId);
   const isDriveDay = Boolean(
     currentDay &&
       (currentDay.showMap ||
@@ -1113,6 +1116,64 @@ export default function Home() {
         navigate("home");
       })
       .catch(() => setSaveState("Could not clone trip"));
+  }
+
+  function reloadTrips(selectedTripId = activeTripId) {
+    return fetch("/api/trips")
+      .then((response) => response.json())
+      .then((payload: { trips: TripRecord[] }) => {
+        setTrips(payload.trips);
+        const selected =
+          payload.trips.find((trip) => trip.id === selectedTripId) ?? payload.trips[0];
+        if (selected) selectTrip(selected);
+      });
+  }
+
+  function deleteTrip(trip: TripRecord) {
+    if (trips.length <= 1) {
+      setSaveState("Keep at least one trip");
+      return;
+    }
+    const confirmed = window.confirm("Delete " + trip.title + "? This removes its itinerary, packing, places, and notes.");
+    if (!confirmed) return;
+
+    setSaveState("Deleting");
+    fetch("/api/trips/" + trip.id, { method: "DELETE" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not delete trip");
+        const remaining = trips.filter((item) => item.id !== trip.id);
+        setTrips(remaining);
+        const nextTrip = remaining.find((item) => item.id === activeTripId) ?? remaining[0];
+        if (nextTrip) selectTrip(nextTrip);
+        setSaveState("Saved");
+      })
+      .catch(() => setSaveState("Could not delete trip"));
+  }
+
+  function reseedTrip(trip: TripRecord) {
+    const confirmed = window.confirm(
+      "Re-seed " + trip.title + "? This resets itinerary, packing, places, and notes using the trip dates.",
+    );
+    if (!confirmed) return;
+
+    setSaveState("Re-seeding");
+    fetch("/api/trips/" + trip.id, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        reseed: true,
+        title: trip.title,
+        destination: trip.destination,
+        dateRange: trip.dateRange,
+        packingTemplate: selectedReseedTemplate,
+      }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not re-seed trip");
+        return reloadTrips(trip.id);
+      })
+      .then(() => setSaveState("Saved"))
+      .catch(() => setSaveState("Could not re-seed trip"));
   }
 
   function moveAgendaItem(fromIndex: number, toIndex: number) {
@@ -1501,13 +1562,16 @@ export default function Home() {
     fetch("/api/trips", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(newTrip),
+      body: JSON.stringify({
+        ...newTrip,
+        packingTemplate: selectedNewTripTemplate,
+      }),
     })
       .then((response) => response.json())
       .then((payload: { trip: TripRecord }) => {
         setTrips((current) => [payload.trip, ...current]);
         selectTrip(payload.trip);
-        setNewTrip({ title: "", destination: "", dateRange: "" });
+        setNewTrip({ title: "", destination: "", dateRange: "", packingTemplateId: "" });
         setShowNewTrip(false);
       })
       .catch(() => setSaveState("Could not create trip"));
@@ -1531,7 +1595,8 @@ export default function Home() {
       <aside className={mobileNav ? "sidebar is-open" : "sidebar"}>
         <div className="brand">
           <div className="brand-mark">
-            <Compass size={21} strokeWidth={2.4} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt="" src="/app-logo.png" />
           </div>
           <div>
             <strong>Burns Travel</strong>
@@ -2498,127 +2563,213 @@ export default function Home() {
           <div className="content-page admin-page">
             <section className="admin-header">
               <div>
-                <span className="kicker">Reusable planning tools</span>
-                <h2>Packing template admin</h2>
-                <p>Create shared packing templates once, then apply them to any trip from that trip&apos;s Packing page.</p>
+                <span className="kicker">Planner control center</span>
+                <h2>Admin</h2>
+                <p>Manage trips, reset planning data, and maintain reusable packing templates from one place.</p>
               </div>
-              <div className="admin-new-template">
-                <input
-                  aria-label="New template name"
-                  placeholder="Template name"
-                  value={newTemplateDraft.name}
-                  onChange={(event) => setNewTemplateDraft((current) => ({ ...current, name: event.target.value }))}
-                />
-                <input
-                  aria-label="New template description"
-                  placeholder="Description"
-                  value={newTemplateDraft.description}
-                  onChange={(event) => setNewTemplateDraft((current) => ({ ...current, description: event.target.value }))}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") createPackingTemplate();
-                  }}
-                />
-                <button className="button primary" disabled={!newTemplateDraft.name.trim()} onClick={createPackingTemplate} type="button">
-                  <Plus size={16} /> New template
+              <div className="admin-tabs" role="tablist" aria-label="Admin sections">
+                <button className={adminTab === "trips" ? "is-active" : ""} onClick={() => setAdminTab("trips")} role="tab" aria-selected={adminTab === "trips"} type="button">
+                  <Route size={16} /> Trip Admin
+                </button>
+                <button className={adminTab === "templates" ? "is-active" : ""} onClick={() => setAdminTab("templates")} role="tab" aria-selected={adminTab === "templates"} type="button">
+                  <ListChecks size={16} /> Packing Templates
                 </button>
               </div>
             </section>
 
-            <div className="template-admin-grid">
-              {packingTemplates.map((template) => {
-                const draft = templateItemDrafts[template.id] ?? { label: "", group: "", note: "" };
-                return (
-                  <section className="template-admin-card" key={template.id}>
-                    <div className="template-admin-heading">
-                      <div>
-                        <input
-                          aria-label={template.name + " template name"}
-                          value={template.name}
-                          onChange={(event) => updatePackingTemplate(template.id, { name: event.target.value })}
-                        />
-                        <textarea
-                          aria-label={template.name + " template description"}
-                          value={template.description}
-                          onChange={(event) => updatePackingTemplate(template.id, { description: event.target.value })}
-                        />
+            {adminTab === "trips" && (
+              <div className="trip-admin-layout">
+                <section className="trip-admin-panel">
+                  <div>
+                    <span className="kicker">Trip Admin</span>
+                    <h3>Trips in this planner</h3>
+                    <p>Select a trip to work on it, edit its setup, re-seed it from its dates, or delete it when you are done.</p>
+                  </div>
+                  <button className="button primary" onClick={() => setShowNewTrip(true)} type="button">
+                    <Plus size={16} /> New trip
+                  </button>
+                </section>
+
+                <section className="reseed-panel">
+                  <div>
+                    <span className="kicker">Re-seed option</span>
+                    <h3>Optional packing template</h3>
+                    <p>When you re-seed a trip, its itinerary is rebuilt from the trip dates and this template can be copied into the fresh packing list.</p>
+                  </div>
+                  <select
+                    aria-label="Re-seed packing template"
+                    value={reseedTemplateId}
+                    onChange={(event) => setReseedTemplateId(event.target.value)}
+                  >
+                    <option value="">No packing template</option>
+                    {packingTemplates.map((template) => (
+                      <option key={template.id} value={template.id}>{template.name}</option>
+                    ))}
+                  </select>
+                </section>
+
+                <div className="trip-admin-list">
+                  {trips.map((trip) => (
+                    <section className={trip.id === activeTripId ? "trip-admin-card is-active" : "trip-admin-card"} key={trip.id}>
+                      <div className="trip-admin-main">
+                        <div>
+                          <span className="kicker">{trip.status}</span>
+                          <h3>{trip.title}</h3>
+                          <p>{trip.destination} · {trip.dateRange || "Dates TBD"}</p>
+                        </div>
+                        <div className="trip-admin-stats">
+                          <span>{trip.data?.days?.length ?? 0}<small>days</small></span>
+                          <span>{trip.data?.checklist?.length ?? 0}<small>packing</small></span>
+                          <span>{trip.data?.places?.length ?? 0}<small>places</small></span>
+                        </div>
                       </div>
-                      <button className="icon-button delete-icon" onClick={() => removePackingTemplate(template.id)} aria-label={"Remove " + template.name + " template"} type="button">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <div className="template-admin-items">
-                      {template.items.map((item, index) => (
-                        <div className="template-admin-item" key={item.id + "-" + index}>
-                          <input
-                            aria-label="Template item name"
-                            value={item.label}
-                            onChange={(event) => updateTemplateItem(template.id, index, { label: event.target.value })}
-                          />
-                          <input
-                            aria-label="Template item group"
-                            value={item.group}
-                            onChange={(event) => updateTemplateItem(template.id, index, { group: event.target.value })}
-                          />
-                          <input
-                            aria-label="Template item note"
-                            placeholder="Optional note"
-                            value={item.note ?? ""}
-                            onChange={(event) => updateTemplateItem(template.id, index, { note: event.target.value })}
-                          />
-                          <button className="icon-button delete-icon" onClick={() => removeTemplateItem(template.id, index)} aria-label={"Remove " + item.label} type="button">
-                            <Trash2 size={15} />
+                      <div className="trip-admin-actions">
+                        <button className="button" onClick={() => selectTrip(trip, true)} type="button">
+                          <ArrowRight size={15} /> Open
+                        </button>
+                        <button className="button" onClick={() => { selectTrip(trip); setShowTripSettings(true); }} type="button">
+                          <Edit3 size={15} /> Edit setup
+                        </button>
+                        <button className="button" onClick={() => reseedTrip(trip)} type="button">
+                          <Sparkles size={15} /> Re-seed
+                        </button>
+                        <button className="button danger-button" disabled={trips.length <= 1} onClick={() => deleteTrip(trip)} type="button">
+                          <Trash2 size={15} /> Delete
+                        </button>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {adminTab === "templates" && (
+              <>
+                <section className="admin-template-tools">
+                  <div>
+                    <span className="kicker">Packing Templates</span>
+                    <h3>Reusable packing lists</h3>
+                    <p>Create shared packing templates once, then apply them during trip creation, re-seeding, or from a trip&apos;s Packing page.</p>
+                  </div>
+                  <div className="admin-new-template">
+                    <input
+                      aria-label="New template name"
+                      placeholder="Template name"
+                      value={newTemplateDraft.name}
+                      onChange={(event) => setNewTemplateDraft((current) => ({ ...current, name: event.target.value }))}
+                    />
+                    <input
+                      aria-label="New template description"
+                      placeholder="Description"
+                      value={newTemplateDraft.description}
+                      onChange={(event) => setNewTemplateDraft((current) => ({ ...current, description: event.target.value }))}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") createPackingTemplate();
+                      }}
+                    />
+                    <button className="button primary" disabled={!newTemplateDraft.name.trim()} onClick={createPackingTemplate} type="button">
+                      <Plus size={16} /> New template
+                    </button>
+                  </div>
+                </section>
+
+                <div className="template-admin-grid">
+                  {packingTemplates.map((template) => {
+                    const draft = templateItemDrafts[template.id] ?? { label: "", group: "", note: "" };
+                    return (
+                      <section className="template-admin-card" key={template.id}>
+                        <div className="template-admin-heading">
+                          <div>
+                            <input
+                              aria-label={template.name + " template name"}
+                              value={template.name}
+                              onChange={(event) => updatePackingTemplate(template.id, { name: event.target.value })}
+                            />
+                            <textarea
+                              aria-label={template.name + " template description"}
+                              value={template.description}
+                              onChange={(event) => updatePackingTemplate(template.id, { description: event.target.value })}
+                            />
+                          </div>
+                          <button className="icon-button delete-icon" onClick={() => removePackingTemplate(template.id)} aria-label={"Remove " + template.name + " template"} type="button">
+                            <Trash2 size={16} />
                           </button>
                         </div>
-                      ))}
-                    </div>
-                    <form
-                      className="template-admin-add"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        addTemplateItem(template.id);
-                      }}
-                    >
-                      <input
-                        aria-label={"Add item to " + template.name + " template"}
-                        placeholder="Item name"
-                        value={draft.label}
-                        onChange={(event) =>
-                          setTemplateItemDrafts((current) => ({
-                            ...current,
-                            [template.id]: { ...draft, label: event.target.value },
-                          }))
-                        }
-                      />
-                      <input
-                        aria-label={"Group for " + template.name + " template item"}
-                        placeholder="Group"
-                        value={draft.group}
-                        onChange={(event) =>
-                          setTemplateItemDrafts((current) => ({
-                            ...current,
-                            [template.id]: { ...draft, group: event.target.value },
-                          }))
-                        }
-                      />
-                      <input
-                        aria-label={"Note for " + template.name + " template item"}
-                        placeholder="Desc / note"
-                        value={draft.note}
-                        onChange={(event) =>
-                          setTemplateItemDrafts((current) => ({
-                            ...current,
-                            [template.id]: { ...draft, note: event.target.value },
-                          }))
-                        }
-                      />
-                      <button className="icon-button quick-add-button" disabled={!draft.label.trim()} aria-label={"Add item to " + template.name + " template"} type="submit">
-                        <Plus size={17} />
-                      </button>
-                    </form>
-                  </section>
-                );
-              })}
-            </div>
+                        <div className="template-admin-items">
+                          {template.items.map((item, index) => (
+                            <div className="template-admin-item" key={item.id + "-" + index}>
+                              <input
+                                aria-label="Template item name"
+                                value={item.label}
+                                onChange={(event) => updateTemplateItem(template.id, index, { label: event.target.value })}
+                              />
+                              <input
+                                aria-label="Template item group"
+                                value={item.group}
+                                onChange={(event) => updateTemplateItem(template.id, index, { group: event.target.value })}
+                              />
+                              <input
+                                aria-label="Template item note"
+                                placeholder="Optional note"
+                                value={item.note ?? ""}
+                                onChange={(event) => updateTemplateItem(template.id, index, { note: event.target.value })}
+                              />
+                              <button className="icon-button delete-icon" onClick={() => removeTemplateItem(template.id, index)} aria-label={"Remove " + item.label} type="button">
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <form
+                          className="template-admin-add"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            addTemplateItem(template.id);
+                          }}
+                        >
+                          <input
+                            aria-label={"Add item to " + template.name + " template"}
+                            placeholder="Item name"
+                            value={draft.label}
+                            onChange={(event) =>
+                              setTemplateItemDrafts((current) => ({
+                                ...current,
+                                [template.id]: { ...draft, label: event.target.value },
+                              }))
+                            }
+                          />
+                          <input
+                            aria-label={"Group for " + template.name + " template item"}
+                            placeholder="Group"
+                            value={draft.group}
+                            onChange={(event) =>
+                              setTemplateItemDrafts((current) => ({
+                                ...current,
+                                [template.id]: { ...draft, group: event.target.value },
+                              }))
+                            }
+                          />
+                          <input
+                            aria-label={"Note for " + template.name + " template item"}
+                            placeholder="Desc / note"
+                            value={draft.note}
+                            onChange={(event) =>
+                              setTemplateItemDrafts((current) => ({
+                                ...current,
+                                [template.id]: { ...draft, note: event.target.value },
+                              }))
+                            }
+                          />
+                          <button className="icon-button quick-add-button" disabled={!draft.label.trim()} aria-label={"Add item to " + template.name + " template"} type="submit">
+                            <Plus size={17} />
+                          </button>
+                        </form>
+                      </section>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>
@@ -2644,6 +2795,24 @@ export default function Home() {
               <label>Destination<input aria-label="Destination" placeholder="City, region, or park" value={newTrip.destination} onChange={(event) => setNewTrip((current) => ({ ...current, destination: event.target.value }))} /></label>
               <label>Dates<input aria-label="Date range" placeholder="Aug 8 - Aug 14" value={newTrip.dateRange} onChange={(event) => setNewTrip((current) => ({ ...current, dateRange: event.target.value }))} /></label>
             </div>
+            <label>
+              Start with packing template?
+              <select
+                aria-label="New trip packing template"
+                value={newTrip.packingTemplateId}
+                onChange={(event) => setNewTrip((current) => ({ ...current, packingTemplateId: event.target.value }))}
+              >
+                <option value="">No template yet</option>
+                {packingTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>{template.name}</option>
+                ))}
+              </select>
+            </label>
+            {selectedNewTripTemplate && (
+              <p className="modal-helper">
+                Adds {selectedNewTripTemplate.items.length} items from {selectedNewTripTemplate.name} to this trip&apos;s packing list.
+              </p>
+            )}
             <button className="button primary full-button" onClick={createTrip} type="button">Create trip <ArrowRight size={17} /></button>
           </section>
         </div>
