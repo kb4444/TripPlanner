@@ -1213,6 +1213,31 @@ export default function Home() {
     selectMapStop(currentDay.agenda.length);
   }
 
+  function addRouteStopFromMap(
+    patchData: Partial<DayPlan["agenda"][number]>,
+    fallbackTitle = "Route stop",
+  ) {
+    if (!currentDay) return;
+    const nextIndex = currentDay.agenda.length;
+    const nextTitle = patchData.title?.trim() || fallbackTitle + " " + (nextIndex + 1);
+    updateDay(activeDay, {
+      agenda: [
+        ...currentDay.agenda,
+        {
+          time: "Stop " + (nextIndex + 1),
+          title: nextTitle,
+          detail: "",
+          location: patchData.location ?? nextTitle,
+          lat: patchData.lat ?? "",
+          lng: patchData.lng ?? "",
+        },
+      ],
+    });
+    setMapStopIndex(nextIndex);
+    setMapDraft("");
+    setMapApplyNote("Added " + nextTitle);
+  }
+
   function updateAgendaItem(index: number, patchData: Partial<DayPlan["agenda"][number]>) {
     if (!currentDay) return;
     updateDay(activeDay, {
@@ -1229,10 +1254,23 @@ export default function Home() {
   }
 
   function applyMapDraftToStop() {
-    if (!selectedStop || !mapDraft.trim()) return;
+    if (!mapDraft.trim()) return;
     const coordinates = parseCoordinates(mapDraft);
     const cleanDraft = mapDraft.replace(/\s+/g, " ").trim();
     const isUrl = /^https?:\/\//i.test(cleanDraft);
+    if (!selectedStop) {
+      addRouteStopFromMap(
+        {
+          title: coordinates ? "Route stop " + ((currentDay?.agenda.length ?? 0) + 1) : cleanDraft,
+          location: coordinates && isUrl ? "Route stop " + ((currentDay?.agenda.length ?? 0) + 1) : cleanDraft,
+          lat: coordinates?.lat ?? "",
+          lng: coordinates?.lng ?? "",
+        },
+        "Route stop",
+      );
+      setMapApplyNote("Added first route stop");
+      return;
+    }
     updateAgendaItem(selectedStopIndex, {
       location: coordinates && isUrl ? selectedStop.location || selectedStop.title : cleanDraft,
       lat: coordinates?.lat ?? selectedStop.lat ?? "",
@@ -1242,7 +1280,18 @@ export default function Home() {
   }
 
   function applyMapClickToStop(coordinates: { lat: string; lng: string }) {
-    if (!selectedStop) return;
+    if (!selectedStop) {
+      const nextTitle = "Route stop " + ((currentDay?.agenda.length ?? 0) + 1);
+      addRouteStopFromMap({
+        title: nextTitle,
+        location: coordinates.lat + ", " + coordinates.lng,
+        lat: coordinates.lat,
+        lng: coordinates.lng,
+      });
+      setMapDraft(coordinates.lat + ", " + coordinates.lng);
+      setMapApplyNote("Map click added " + nextTitle);
+      return;
+    }
     const selectedTitle = selectedStop.title;
     updateTripData((currentData) => ({
       ...currentData,
@@ -1955,7 +2004,7 @@ export default function Home() {
                         onSelectStop={selectMapStop}
                         previewLabel={previewLocation}
                         selectedIndex={selectedStopIndex}
-                        selectedStopTitle={selectedStop?.title ?? "Selected stop"}
+                        selectedStopTitle={selectedStop?.title ?? "Click map to add stop"}
                         stops={currentDay.agenda}
                       />
                     </div>
@@ -1963,7 +2012,7 @@ export default function Home() {
                       <div className="route-summary-heading">
                         <div>
                           <span className="kicker"><Navigation size={14} /> Drive day route</span>
-                          <h3>{selectedStop ? "Map " + selectedStop.title : "Stops, in order"}</h3>
+                          <h3>{selectedStop ? "Map " + selectedStop.title : "Add your first stop"}</h3>
                         </div>
                         <button
                           className="icon-button map-hide-button"
@@ -2004,7 +2053,11 @@ export default function Home() {
                             : "Map 2 stops first"}
                       </button>
                       <div className="map-editor">
-                        <label htmlFor="map-search">Click the map, or paste a map target</label>
+                        <label htmlFor="map-search">
+                          {selectedStop
+                            ? "Click the map, or paste a map target"
+                            : "Click the map to add a stop, or paste a place"}
+                        </label>
                         <div className="map-search-row">
                           <Search size={15} />
                           <input
@@ -2027,12 +2080,21 @@ export default function Home() {
                         <div className="map-editor-actions">
                           <button
                             className="button route-apply-button"
-                            disabled={!mapDraft.trim() || !selectedStop}
+                            disabled={!mapDraft.trim()}
                             onClick={applyMapDraftToStop}
                             type="button"
                           >
-                            <CheckCircle2 size={16} /> Apply to selected stop
+                            <CheckCircle2 size={16} /> {selectedStop ? "Apply to selected stop" : "Add as stop"}
                           </button>
+                          {!selectedStop && (
+                            <button
+                              className="button quiet"
+                              onClick={() => addRouteStopFromMap({ title: "Route stop " + (currentDay.agenda.length + 1) })}
+                              type="button"
+                            >
+                              <Plus size={16} /> Add blank stop
+                            </button>
+                          )}
                           <button
                             className="map-clear-button"
                             onClick={() => {
@@ -2047,25 +2109,33 @@ export default function Home() {
                         {mapApplyNote && <span className="save-note">{mapApplyNote}</span>}
                       </div>
                       <div className="route-stop-list">
-                        {currentDay.agenda.map((item, index) => (
-                          <button
-                            className={selectedStopIndex === index ? "route-stop is-active" : "route-stop"}
-                            key={item.title + "-" + index}
-                            onClick={() => selectMapStop(index)}
-                            type="button"
-                          >
-                            <span className="stop-number">{index + 1}</span>
-                            <span>
-                              <strong>{item.title}</strong>
-                              <small>{agendaLocation(item)}</small>
-                              {item.lat?.trim() && item.lng?.trim() && (
-                                <small className="coordinate-line">{item.lat}, {item.lng}</small>
-                              )}
-                              {selectedStopIndex === index && <small className="selected-stop-label">Selected for map</small>}
-                            </span>
-                            <ChevronRight size={16} />
-                          </button>
-                        ))}
+                        {currentDay.agenda.length ? (
+                          currentDay.agenda.map((item, index) => (
+                            <button
+                              className={selectedStopIndex === index ? "route-stop is-active" : "route-stop"}
+                              key={item.title + "-" + index}
+                              onClick={() => selectMapStop(index)}
+                              type="button"
+                            >
+                              <span className="stop-number">{index + 1}</span>
+                              <span>
+                                <strong>{item.title}</strong>
+                                <small>{agendaLocation(item)}</small>
+                                {item.lat?.trim() && item.lng?.trim() && (
+                                  <small className="coordinate-line">{item.lat}, {item.lng}</small>
+                                )}
+                                {selectedStopIndex === index && <small className="selected-stop-label">Selected for map</small>}
+                              </span>
+                              <ChevronRight size={16} />
+                            </button>
+                          ))
+                        ) : (
+                          <div className="route-empty-state">
+                            <MapPin size={18} />
+                            <strong>No route stops yet</strong>
+                            <span>Click the map to drop Stop 1, or paste a place above.</span>
+                          </div>
+                        )}
                       </div>
                       <a className="button route-button" href={routeUrl} target="_blank" rel="noreferrer">
                         <Route size={17} /> Open full route <ExternalLink size={15} />

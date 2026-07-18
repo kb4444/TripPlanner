@@ -1252,7 +1252,7 @@ button {
 .map-editor-actions {
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
 }
 
 .route-apply-button {
@@ -1278,6 +1278,34 @@ button {
   gap: 4px;
   margin-bottom: 14px;
   overflow-y: auto;
+}
+
+.route-empty-state {
+  align-items: center;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  color: #c5d4d0;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  margin-bottom: 8px;
+  padding: 18px 12px;
+  text-align: center;
+}
+
+.route-empty-state svg {
+  color: #75b9ae;
+}
+
+.route-empty-state strong {
+  color: white;
+  font-size: 0.78rem;
+}
+
+.route-empty-state span {
+  color: #9fb3ae;
+  font-size: 0.64rem;
+  line-height: 1.4;
 }
 
 .route-stop {

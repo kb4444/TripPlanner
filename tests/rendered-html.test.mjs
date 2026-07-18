@@ -63,6 +63,10 @@ test("drive days include maps, directions, and a stop timeline", async () => {
   assert.match(page, /parseCoordinates/);
   assert.match(page, /Apply to selected stop/);
   assert.match(page, /Click the map, or paste a map target/);
+  assert.match(page, /Click the map to add a stop, or paste a place/);
+  assert.match(page, /Map click added/);
+  assert.match(page, /Add as stop/);
+  assert.match(page, /No route stops yet/);
   assert.match(page, /router\.project-osrm\.org\/route\/v1\/driving/);
   assert.match(page, /Road route/);
   assert.match(page, /Show road route/);
@@ -91,6 +95,7 @@ test("responsive visual system includes mobile navigation", async () => {
   assert.match(css, /\.map-stop-marker/);
   assert.match(css, /\.route-overlay/);
   assert.match(css, /\.route-stats/);
+  assert.match(css, /\.route-empty-state/);
   assert.match(css, /\.route-focus-button/);
   assert.match(css, /\.route-collapsed-panel/);
   assert.match(css, /\.search-control/);
