@@ -1,0 +1,124 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const pageUrl = new URL("../app/page.tsx", import.meta.url);
+const cssUrl = new URL("../app/globals.css", import.meta.url);
+const tripsApiUrl = new URL("../app/api/trips/route.ts", import.meta.url);
+const templatesApiUrl = new URL("../app/api/packing-templates/route.ts", import.meta.url);
+
+test("ships the trip library and editable planning surfaces", async () => {
+  const page = await readFile(pageUrl, "utf8");
+
+  assert.match(page, /Everything for the next adventure, in one place/);
+  assert.match(page, /export default function Home/);
+  assert.match(page, /setEditMode/);
+  assert.match(page, /addAgendaItem/);
+  assert.match(page, /addChecklistItem/);
+  assert.match(page, /addPlace/);
+  assert.match(page, /Search packing list/);
+  assert.match(page, /Needs packing/);
+  assert.match(page, /Add section/);
+  assert.match(page, /Apply template/);
+  assert.match(page, /Packing template admin/);
+  assert.match(page, /defaultPackingTemplates/);
+  assert.match(page, /applyPackingTemplate/);
+  assert.match(page, /quick-add-item/);
+  assert.match(page, /Item name/);
+  assert.match(page, /Desc \/ note/);
+  assert.match(page, /packingGroups\?: string/);
+  assert.match(page, /Search saved places/);
+  assert.match(page, /autosaveReady/);
+  assert.match(page, /Trip settings/);
+  assert.match(page, /Clone as template/);
+  assert.match(page, /Private-only share prep/);
+  assert.match(page, /Smart packing prompts/);
+  assert.match(page, /Bathing suits/);
+  assert.match(page, /Weather and conditions/);
+  assert.match(page, /showMap\?: boolean/);
+  assert.match(page, /Route map/);
+  assert.match(page, /draggable=\{editMode\}/);
+  assert.doesNotMatch(page, /LegacyHome/);
+});
+
+test("drive days include maps, directions, and a stop timeline", async () => {
+  const page = await readFile(pageUrl, "utf8");
+
+  assert.match(page, /google\.com\/maps\/dir\/\?api=1/);
+  assert.match(page, /Drive day route/);
+  assert.match(page, /Open full route/);
+  assert.match(page, /Show on map/);
+  assert.match(page, /ItineraryClickMap/);
+  assert.match(page, /Click map to set selected stop coordinates/);
+  assert.match(page, /Map click saved to/);
+  assert.match(page, /Selected for map/);
+  assert.match(page, /location\?: string/);
+  assert.match(page, /lat\?: string/);
+  assert.match(page, /parseCoordinates/);
+  assert.match(page, /Apply to selected stop/);
+  assert.match(page, /Click the map, or paste a map target/);
+  assert.match(page, /router\.project-osrm\.org\/route\/v1\/driving/);
+  assert.match(page, /Road route/);
+  assert.match(page, /Show road route/);
+  assert.match(page, /focusRouteRequest/);
+  assert.match(page, /Hide map/);
+  assert.match(page, /Show map/);
+  assert.match(page, /formatRouteDuration/);
+  assert.match(page, /formatRouteDistance/);
+  assert.match(page, /if \(!cleanLat \|\| !cleanLng\) return null/);
+  assert.match(page, /knownCoordinateForLocation/);
+  assert.match(page, /stopCoordinate/);
+  assert.match(page, /routeCoordinates/);
+  assert.match(page, /mapReady/);
+  assert.match(page, /hounds town/);
+  assert.match(page, /40\.104855/);
+});
+
+test("responsive visual system includes mobile navigation", async () => {
+  const css = await readFile(cssUrl, "utf8");
+
+  assert.match(css, /\.sidebar\.is-open/);
+  assert.match(css, /@media \(max-width: 900px\)/);
+  assert.match(css, /\.route-workspace/);
+  assert.match(css, /leaflet\/dist\/leaflet\.css/);
+  assert.match(css, /\.click-map/);
+  assert.match(css, /\.map-stop-marker/);
+  assert.match(css, /\.route-overlay/);
+  assert.match(css, /\.route-stats/);
+  assert.match(css, /\.route-focus-button/);
+  assert.match(css, /\.route-collapsed-panel/);
+  assert.match(css, /\.search-control/);
+  assert.match(css, /\.add-section-panel/);
+  assert.match(css, /\.template-apply-panel/);
+  assert.match(css, /\.admin-page/);
+  assert.match(css, /\.template-admin-card/);
+  assert.match(css, /\.quick-add-item/);
+  assert.match(css, /\.quick-add-button/);
+  assert.match(css, /\.toggle-control/);
+  assert.match(css, /\.settings-overview/);
+  assert.match(css, /\.suggestion-panel/);
+  assert.match(css, /\.private-share-panel/);
+  assert.match(css, /\.drag-handle/);
+  assert.match(css, /\.timeline-item\.is-map-selected/);
+  assert.match(css, /\.selected-stop-label/);
+  assert.match(css, /\.map-editor/);
+  assert.match(css, /\.day-map-toggle/);
+  assert.match(css, /\.coordinate-fields/);
+  assert.match(css, /\.trip-feature/);
+  assert.match(css, /conic-gradient/);
+});
+
+test("new trips keep trip-owned packing and central templates", async () => {
+  const tripsApi = await readFile(tripsApiUrl, "utf8");
+  const templatesApi = await readFile(templatesApiUrl, "utf8");
+
+  assert.match(tripsApi, /const blankTripData = \{\s+days: \[\],\s+checklist: \[\],/);
+  assert.match(tripsApi, /packingGroups: \[\]/);
+  assert.match(tripsApi, /hasCopiedStarterChecklist/);
+  assert.match(tripsApi, /A new trip shell using the Burns Travel framework/);
+  assert.match(templatesApi, /defaultPackingTemplates/);
+  assert.match(templatesApi, /Beach/);
+  assert.match(templatesApi, /Camping/);
+  assert.match(templatesApi, /Amusement Park/);
+  assert.match(templatesApi, /app_settings/);
+});
