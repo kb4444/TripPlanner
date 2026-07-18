@@ -113,6 +113,10 @@ test("new trips keep trip-owned packing and central templates", async () => {
   const templatesApi = await readFile(templatesApiUrl, "utf8");
 
   assert.match(tripsApi, /const blankTripData = \{\s+days: \[\],\s+checklist: \[\],/);
+  assert.match(tripsApi, /createItineraryDaysFromDateRange/);
+  assert.match(tripsApi, /Arrival \/ travel day/);
+  assert.match(tripsApi, /Departure \/ travel day/);
+  assert.match(tripsApi, /days: createItineraryDaysFromDateRange\(dateRange\)/);
   assert.match(tripsApi, /packingGroups: \[\]/);
   assert.match(tripsApi, /hasCopiedStarterChecklist/);
   assert.match(tripsApi, /A new trip shell using the Burns Travel framework/);
