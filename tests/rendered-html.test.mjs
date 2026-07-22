@@ -61,6 +61,11 @@ test("drive days include maps, directions, and a stop timeline", async () => {
   assert.match(page, /location\?: string/);
   assert.match(page, /lat\?: string/);
   assert.match(page, /parseCoordinates/);
+  assert.match(page, /placeSearchEndpoint/);
+  assert.match(page, /formatPhotonSuggestion/);
+  assert.match(page, /locationSearch/);
+  assert.match(page, /Map location suggestions/);
+  assert.match(page, /Type 3\+ characters to search places/);
   assert.match(page, /Apply to selected stop/);
   assert.match(page, /Click the map, or paste a map target/);
   assert.match(page, /Click the map to add a stop, or paste a place/);
@@ -96,6 +101,7 @@ test("responsive visual system includes mobile navigation", async () => {
   assert.match(css, /\.route-overlay/);
   assert.match(css, /\.route-stats/);
   assert.match(css, /\.route-empty-state/);
+  assert.match(css, /\.location-suggestions/);
   assert.match(css, /\.route-focus-button/);
   assert.match(css, /\.route-collapsed-panel/);
   assert.match(css, /\.search-control/);

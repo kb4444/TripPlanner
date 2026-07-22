@@ -79,6 +79,14 @@ type RouteSummary = {
   status: "ready" | "partial" | "loading" | "error";
 };
 
+type PlaceSuggestion = {
+  id: string;
+  name: string;
+  detail: string;
+  lat: string;
+  lng: string;
+};
+
 type TripData = {
   days: DayPlan[];
   checklist: ChecklistItem[];
@@ -405,6 +413,37 @@ const defaultPackingTemplates: PackingTemplate[] = [
     ],
   },
 ];
+
+const placeSearchEndpoint = "https://photon.komoot.io/api/";
+
+function formatPhotonSuggestion(feature: {
+  geometry?: { coordinates?: [number, number] };
+  properties?: Record<string, unknown>;
+}): PlaceSuggestion | null {
+  const coordinates = feature.geometry?.coordinates;
+  if (!coordinates) return null;
+  const properties = feature.properties ?? {};
+  const name = String(properties.name ?? properties.street ?? properties.city ?? "Map result");
+  const locality = [
+    properties.housenumber,
+    properties.street,
+    properties.city,
+    properties.county,
+    properties.state,
+    properties.country,
+  ]
+    .filter(Boolean)
+    .map(String);
+  const detail = [...new Set(locality.filter((item) => item !== name))].join(", ");
+
+  return {
+    id: String(properties.osm_id ?? properties.osm_key ?? name + coordinates.join(",")),
+    name,
+    detail,
+    lat: coordinates[1].toFixed(6),
+    lng: coordinates[0].toFixed(6),
+  };
+}
 
 function agendaLocation(item: DayPlan["agenda"][number]) {
   if (item.location?.trim()) return item.location;
@@ -874,6 +913,12 @@ export default function Home() {
   const [mapStopIndex, setMapStopIndex] = useState(0);
   const [mapDraft, setMapDraft] = useState("");
   const [mapApplyNote, setMapApplyNote] = useState("");
+  const [locationSearch, setLocationSearch] = useState<{
+    index: number | null;
+    query: string;
+    results: PlaceSuggestion[];
+    status: "idle" | "loading" | "ready" | "empty" | "error";
+  }>({ index: null, query: "", results: [], status: "idle" });
   const [hiddenMapDays, setHiddenMapDays] = useState<Record<string, boolean>>({});
   const [focusRouteRequest, setFocusRouteRequest] = useState(0);
   const [routeSummary, setRouteSummary] = useState<RouteSummary>(blankRouteSummary);
@@ -888,6 +933,7 @@ export default function Home() {
   const autosaveReady = useRef(false);
   const packedDirty = useRef(false);
   const notesDirty = useRef(false);
+  const locationSearchCache = useRef(new Map<string, PlaceSuggestion[]>());
 
   useEffect(() => {
     fetch("/api/trips")
@@ -937,6 +983,69 @@ export default function Home() {
     }, 500);
     return () => window.clearTimeout(timeout);
   }, [activeTripId, notes, packed, trips]);
+
+  useEffect(() => {
+    const query = locationSearch.query.replace(/\s+/g, " ").trim();
+    if (locationSearch.index === null || query.length < 3) {
+      return;
+    }
+
+    const cacheKey = query.toLowerCase();
+    const cached = locationSearchCache.current.get(cacheKey);
+    if (cached) {
+      setLocationSearch((current) => ({
+        ...current,
+        results: cached,
+        status: cached.length ? "ready" : "empty",
+      }));
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setLocationSearch((current) => ({ ...current, status: "loading" }));
+      const params = new URLSearchParams({
+        q: query,
+        lang: "en",
+        limit: "5",
+      });
+
+      fetch(placeSearchEndpoint + "?" + params.toString(), { signal: controller.signal })
+        .then((response) => {
+          if (!response.ok) throw new Error("Place search failed");
+          return response.json() as Promise<{
+            features?: {
+              geometry?: { coordinates?: [number, number] };
+              properties?: Record<string, unknown>;
+            }[];
+          }>;
+        })
+        .then((payload) => {
+          const results = (payload.features ?? [])
+            .map(formatPhotonSuggestion)
+            .filter((result): result is PlaceSuggestion => Boolean(result));
+          locationSearchCache.current.set(cacheKey, results);
+          setLocationSearch((current) =>
+            current.query.replace(/\s+/g, " ").trim().toLowerCase() === cacheKey
+              ? {
+                  ...current,
+                  results,
+                  status: results.length ? "ready" : "empty",
+                }
+              : current,
+          );
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          setLocationSearch((current) => ({ ...current, results: [], status: "error" }));
+        });
+    }, 450);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [locationSearch.index, locationSearch.query]);
 
   const activeTrip = trips.find((trip) => trip.id === activeTripId);
   const tripData = activeTrip?.data ?? defaultTripData;
@@ -1245,6 +1354,27 @@ export default function Home() {
         itemIndex === index ? { ...item, ...patchData } : item,
       ),
     });
+  }
+
+  function updateAgendaLocationSearch(index: number, value: string) {
+    updateAgendaItem(index, { location: value });
+    setLocationSearch({
+      index,
+      query: value,
+      results: [],
+      status: value.trim().length >= 3 ? "loading" : "idle",
+    });
+  }
+
+  function selectPlaceSuggestion(index: number, suggestion: PlaceSuggestion) {
+    updateAgendaItem(index, {
+      location: suggestion.detail ? suggestion.name + ", " + suggestion.detail : suggestion.name,
+      lat: suggestion.lat,
+      lng: suggestion.lng,
+    });
+    selectMapStop(index);
+    setLocationSearch({ index: null, query: "", results: [], status: "idle" });
+    setMapApplyNote("Mapped " + suggestion.name);
   }
 
   function selectMapStop(index: number) {
@@ -2185,7 +2315,63 @@ export default function Home() {
                                   <button className="icon-button mini" disabled={index === currentDay.agenda.length - 1} onClick={() => moveAgendaItem(index, index + 1)} aria-label={"Move " + item.title + " later"} type="button"><ArrowDown size={14} /></button>
                                 </div>
                                 <input className="item-title-input" aria-label="Agenda title" value={item.title} onChange={(event) => updateAgendaItem(index, { title: event.target.value })} />
-                                <input aria-label="Map location" placeholder="Map location or address" value={item.location ?? ""} onChange={(event) => updateAgendaItem(index, { location: event.target.value })} />
+                                <div className="location-search-field">
+                                  <input
+                                    aria-label="Map location"
+                                    autoComplete="off"
+                                    placeholder="Map location or address"
+                                    value={item.location ?? ""}
+                                    onChange={(event) => updateAgendaLocationSearch(index, event.target.value)}
+                                    onFocus={() =>
+                                      setLocationSearch({
+                                        index,
+                                        query: item.location ?? "",
+                                        results: [],
+                                        status: (item.location ?? "").trim().length >= 3 ? "loading" : "idle",
+                                      })
+                                    }
+                                  />
+                                  {locationSearch.index === index && (
+                                    <div className="location-suggestions" role="listbox" aria-label="Map location suggestions">
+                                      {locationSearch.status === "idle" && (
+                                        <span>Type 3+ characters to search places.</span>
+                                      )}
+                                      {locationSearch.status === "loading" && (
+                                        <span>Searching map places...</span>
+                                      )}
+                                      {locationSearch.status === "empty" && (
+                                        <span>No places found. Try city and state.</span>
+                                      )}
+                                      {locationSearch.status === "error" && (
+                                        <span>Place search is unavailable right now.</span>
+                                      )}
+                                      {locationSearch.results.map((suggestion) => (
+                                        <button
+                                          key={suggestion.id}
+                                          onMouseDown={(event) => event.preventDefault()}
+                                          onClick={() => selectPlaceSuggestion(index, suggestion)}
+                                          aria-selected="false"
+                                          role="option"
+                                          type="button"
+                                        >
+                                          <MapPin size={15} />
+                                          <span>
+                                            <strong>{suggestion.name}</strong>
+                                            <small>{suggestion.detail || suggestion.lat + ", " + suggestion.lng}</small>
+                                          </span>
+                                        </button>
+                                      ))}
+                                      <button
+                                        className="location-suggestions-close"
+                                        onMouseDown={(event) => event.preventDefault()}
+                                        onClick={() => setLocationSearch({ index: null, query: "", results: [], status: "idle" })}
+                                        type="button"
+                                      >
+                                        Close suggestions
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                                 <div className="coordinate-fields">
                                   <input aria-label="Latitude" placeholder="Latitude" value={item.lat ?? ""} onChange={(event) => updateAgendaItem(index, { lat: event.target.value })} />
                                   <input aria-label="Longitude" placeholder="Longitude" value={item.lng ?? ""} onChange={(event) => updateAgendaItem(index, { lng: event.target.value })} />
