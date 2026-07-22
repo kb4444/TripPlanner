@@ -36,6 +36,10 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Search saved places/);
   assert.match(page, /autosaveReady/);
   assert.match(page, /Trip settings/);
+  assert.match(page, /Trip book/);
+  assert.match(page, /Print \/ save PDF/);
+  assert.match(page, /AAA-style trip book/);
+  assert.match(page, /routeMapGeometry/);
   assert.match(page, /Clone as template/);
   assert.match(page, /Private-only share prep/);
   assert.match(page, /Smart packing prompts/);
@@ -109,6 +113,9 @@ test("responsive visual system includes mobile navigation", async () => {
   assert.match(css, /\.template-apply-panel/);
   assert.match(css, /\.admin-page/);
   assert.match(css, /\.admin-tabs/);
+  assert.match(css, /\.trip-book-page/);
+  assert.match(css, /@media print/);
+  assert.match(css, /print-color-adjust/);
   assert.match(css, /\.trip-admin-card/);
   assert.match(css, /\.danger-button/);
   assert.match(css, /\.template-admin-card/);

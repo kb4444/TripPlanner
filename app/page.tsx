@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   Copy,
   Clock3,
+  FileText,
   Edit3,
   Eye,
   EyeOff,
@@ -28,6 +29,7 @@ import {
   Navigation,
   NotebookPen,
   Plus,
+  Printer,
   Route,
   Search,
   Sparkles,
@@ -519,6 +521,41 @@ function routeCoordinates(stops: DayPlan["agenda"]) {
     );
 }
 
+function routeMapGeometry(stops: DayPlan["agenda"]) {
+  const points = routeCoordinates(stops);
+  if (!points.length) return [];
+  const latitudes = points.map((point) => point.coordinate[0]);
+  const longitudes = points.map((point) => point.coordinate[1]);
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+  const latSpan = Math.max(maxLat - minLat, 0.01);
+  const lngSpan = Math.max(maxLng - minLng, 0.01);
+
+  return points.map((point) => ({
+    ...point,
+    x: 24 + ((point.coordinate[1] - minLng) / lngSpan) * 232,
+    y: 142 - ((point.coordinate[0] - minLat) / latSpan) * 104,
+  }));
+}
+
+function directionsUrlForStops(stops: DayPlan["agenda"], fallback = "Trip route") {
+  const targets = stops.map(mapTarget).filter(Boolean);
+  if (targets.length > 1) {
+    return (
+      "https://www.google.com/maps/dir/?api=1&origin=" +
+      encodeURIComponent(targets[0]) +
+      "&destination=" +
+      encodeURIComponent(targets[targets.length - 1]) +
+      "&waypoints=" +
+      encodeURIComponent(targets.slice(1, -1).join("|")) +
+      "&travelmode=driving"
+    );
+  }
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(targets[0] ?? fallback);
+}
+
 function formatRouteDistance(miles?: number) {
   if (!Number.isFinite(miles)) return "Distance pending";
   if ((miles ?? 0) < 10) return (miles ?? 0).toFixed(1) + " mi";
@@ -925,6 +962,7 @@ export default function Home() {
   const [mobileNav, setMobileNav] = useState(false);
   const [showNewTrip, setShowNewTrip] = useState(false);
   const [showTripSettings, setShowTripSettings] = useState(false);
+  const [showTripBook, setShowTripBook] = useState(false);
   const [adminTab, setAdminTab] = useState<"trips" | "templates">("trips");
   const [reseedTemplateId, setReseedTemplateId] = useState("");
   const [newTrip, setNewTrip] = useState({ title: "", destination: "", dateRange: "", packingTemplateId: "" });
@@ -1121,6 +1159,16 @@ export default function Home() {
         "&travelmode=driving"
       : "https://www.google.com/maps/search/?api=1&query=" +
         encodeURIComponent(selectedLocation);
+  const checklistByGroup = groups.map((group) => ({
+    group,
+    items: dataChecklist.filter((item) => item.group === group),
+  }));
+  const mappedDayCount = dataDays.filter((day) => routeCoordinates(day.agenda).length > 0).length;
+
+  function printTripBook() {
+    setShowTripBook(true);
+    window.setTimeout(() => window.print(), 150);
+  }
 
   function navigate(view: string) {
     setActiveView(view);
@@ -1922,6 +1970,13 @@ export default function Home() {
                         Open trip <ArrowRight size={17} />
                       </button>
                       <button
+                        className="button light"
+                        onClick={() => setShowTripBook(true)}
+                        type="button"
+                      >
+                        <FileText size={17} /> Trip book
+                      </button>
+                      <button
                         className="icon-button glass"
                         aria-label="More trip options"
                         title="More trip options"
@@ -1954,6 +2009,9 @@ export default function Home() {
                   </button>
                   <button className="button quiet" onClick={cloneTripAsTemplate} type="button">
                     <Copy size={16} /> Clone template
+                  </button>
+                  <button className="button secondary" onClick={() => setShowTripBook(true)} type="button">
+                    <FileText size={16} /> Export PDF
                   </button>
                 </div>
               </section>
@@ -3029,6 +3087,183 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {showTripBook && activeTrip && (
+        <div className="trip-book-backdrop" role="presentation">
+          <section className="trip-book" aria-label="Trip book PDF preview">
+            <div className="trip-book-toolbar">
+              <div>
+                <span className="kicker">AAA-style trip book</span>
+                <h2>{activeTrip.title}</h2>
+                <p>Preview the full route guide, then print or save as one PDF.</p>
+              </div>
+              <div>
+                <button className="button primary" onClick={printTripBook} type="button">
+                  <Printer size={16} /> Print / save PDF
+                </button>
+                <button className="button secondary" onClick={() => setShowTripBook(false)} type="button">
+                  <X size={16} /> Close
+                </button>
+              </div>
+            </div>
+
+            <article className="trip-book-document">
+              <section className="trip-book-page trip-book-cover">
+                <div>
+                  <span className="trip-book-label">Burns Travel route book</span>
+                  <h1>{activeTrip.title}</h1>
+                  <p>{activeTrip.destination}</p>
+                  <strong>{activeTrip.dateRange}</strong>
+                </div>
+                <div className="trip-book-cover-grid">
+                  <span><CalendarDays size={18} /> {dataDays.length} days</span>
+                  <span><Route size={18} /> {mappedDayCount} mapped days</span>
+                  <span><Luggage size={18} /> {dataChecklist.length} packing items</span>
+                  <span><MapPin size={18} /> {dataPlaces.length} saved places</span>
+                </div>
+                {activeTrip.summary && <p className="trip-book-summary">{activeTrip.summary}</p>}
+              </section>
+
+              <section className="trip-book-page trip-book-overview">
+                <div className="trip-book-section-heading">
+                  <span className="trip-book-label">Overview</span>
+                  <h2>Trip At A Glance</h2>
+                </div>
+                <div className="trip-book-overview-grid">
+                  {dataDays.map((day) => (
+                    <div className="trip-book-day-card" key={day.label + day.date}>
+                      <span>{day.label}</span>
+                      <strong>{day.date}</strong>
+                      <p>{day.title}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {dataDays.map((day) => {
+                const mapPoints = routeMapGeometry(day.agenda);
+                const polyline = mapPoints.map((point) => `${point.x},${point.y}`).join(" ");
+                const dayRouteUrl = directionsUrlForStops(day.agenda, activeTrip.destination);
+
+                return (
+                  <section className="trip-book-page trip-book-day" key={day.label + "-" + day.title}>
+                    <div className="trip-book-section-heading">
+                      <span className="trip-book-label">{day.label} · {day.date}</span>
+                      <h2>{day.title}</h2>
+                      {day.mood && <p>{day.mood}</p>}
+                    </div>
+
+                    <div className="trip-book-route-sheet">
+                      <div className="trip-book-map">
+                        <div className="trip-book-map-header">
+                          <span><Route size={15} /> Route strip map</span>
+                          <small>{mapPoints.length} mapped stops</small>
+                        </div>
+                        {mapPoints.length ? (
+                          <svg viewBox="0 0 280 170" role="img" aria-label={day.title + " route map"}>
+                            <rect x="0" y="0" width="280" height="170" rx="10" />
+                            {mapPoints.length > 1 && <polyline points={polyline} />}
+                            {mapPoints.map((point) => (
+                              <g key={point.index} transform={`translate(${point.x} ${point.y})`}>
+                                <circle r="9" />
+                                <text textAnchor="middle" dominantBaseline="central">{point.index + 1}</text>
+                              </g>
+                            ))}
+                          </svg>
+                        ) : (
+                          <div className="trip-book-map-empty">Add stop coordinates to include a route map.</div>
+                        )}
+                      </div>
+                      <div className="trip-book-route-notes">
+                        <h3>Route Notes</h3>
+                        <p>{day.drive || "No route notes yet."}</p>
+                        <a href={dayRouteUrl} target="_blank" rel="noreferrer">Open live map route</a>
+                      </div>
+                    </div>
+
+                    <div className="trip-book-steps">
+                      <h3>Day-by-Day Steps</h3>
+                      {day.agenda.length ? (
+                        day.agenda.map((item, index) => (
+                          <div className="trip-book-step" key={item.time + item.title + index}>
+                            <span>{index + 1}</span>
+                            <div>
+                              <strong>{item.time} · {item.title}</strong>
+                              <small>{agendaLocation(item)}</small>
+                              <p>{item.detail || "Add details for this stop."}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="trip-book-empty">No steps yet. Add stops in the itinerary to fill this sheet.</p>
+                      )}
+                    </div>
+
+                    <div className="trip-book-day-footer">
+                      <div>
+                        <h3>Bring Today</h3>
+                        <p>{day.bring.length ? day.bring.join(", ") : "No day-specific items yet."}</p>
+                      </div>
+                      <div>
+                        <h3>Weather / Conditions</h3>
+                        <p>{day.weatherNeed || "No weather notes yet."}</p>
+                      </div>
+                      <div>
+                        <h3>Decisions</h3>
+                        <p>{day.decisions.length ? day.decisions.join(", ") : "No decisions listed."}</p>
+                      </div>
+                    </div>
+                  </section>
+                );
+              })}
+
+              <section className="trip-book-page trip-book-reference">
+                <div className="trip-book-section-heading">
+                  <span className="trip-book-label">Reference</span>
+                  <h2>Packing Checklist</h2>
+                </div>
+                <div className="trip-book-columns">
+                  {checklistByGroup.map(({ group, items }) => (
+                    <div className="trip-book-list" key={group}>
+                      <h3>{group}</h3>
+                      {items.map((item) => (
+                        <label key={item.id}>
+                          <span />
+                          <strong>{item.label}</strong>
+                          {item.note && <small>{item.note}</small>}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="trip-book-page trip-book-reference">
+                <div className="trip-book-section-heading">
+                  <span className="trip-book-label">Reference</span>
+                  <h2>Places + Notes</h2>
+                </div>
+                <div className="trip-book-columns">
+                  <div className="trip-book-list">
+                    <h3>Saved Places</h3>
+                    {dataPlaces.map((place) => (
+                      <div className="trip-book-place" key={place.name + place.type}>
+                        <strong>{place.name}</strong>
+                        <small>{place.type} · {place.status}</small>
+                        <p>{place.note}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="trip-book-notes">
+                    <h3>Trip Notes</h3>
+                    <p>{notes || "No trip notes yet."}</p>
+                  </div>
+                </div>
+              </section>
+            </article>
+          </section>
+        </div>
+      )}
 
       {showNewTrip && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowNewTrip(false)}>
