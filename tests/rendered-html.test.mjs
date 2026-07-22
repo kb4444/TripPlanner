@@ -39,7 +39,9 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Trip book/);
   assert.match(page, /Print \/ save PDF/);
   assert.match(page, /AAA-style trip book/);
-  assert.match(page, /routeMapGeometry/);
+  assert.match(page, /printableRouteMap/);
+  assert.match(page, /tile\.openstreetmap\.org/);
+  assert.match(page, /Map data OpenStreetMap/);
   assert.match(page, /Clone as template/);
   assert.match(page, /Private-only share prep/);
   assert.match(page, /Smart packing prompts/);
@@ -114,6 +116,9 @@ test("responsive visual system includes mobile navigation", async () => {
   assert.match(css, /\.admin-page/);
   assert.match(css, /\.admin-tabs/);
   assert.match(css, /\.trip-book-page/);
+  assert.match(css, /\.trip-book-static-map/);
+  assert.match(css, /\.trip-book-map-overlay/);
+  assert.match(css, /\.trip-book-route-line/);
   assert.match(css, /@media print/);
   assert.match(css, /print-color-adjust/);
   assert.match(css, /\.trip-admin-card/);

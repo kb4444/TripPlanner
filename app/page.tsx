@@ -521,23 +521,89 @@ function routeCoordinates(stops: DayPlan["agenda"]) {
     );
 }
 
-function routeMapGeometry(stops: DayPlan["agenda"]) {
-  const points = routeCoordinates(stops);
-  if (!points.length) return [];
-  const latitudes = points.map((point) => point.coordinate[0]);
-  const longitudes = points.map((point) => point.coordinate[1]);
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-  const latSpan = Math.max(maxLat - minLat, 0.01);
-  const lngSpan = Math.max(maxLng - minLng, 0.01);
+const PRINT_MAP_WIDTH = 640;
+const PRINT_MAP_HEIGHT = 360;
+const PRINT_MAP_TILE_SIZE = 256;
 
-  return points.map((point) => ({
+function mercatorPoint([lat, lng]: [number, number], zoom: number) {
+  const sinLat = Math.sin((Math.max(Math.min(lat, 85.05112878), -85.05112878) * Math.PI) / 180);
+  const scale = PRINT_MAP_TILE_SIZE * 2 ** zoom;
+
+  return {
+    x: ((lng + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  };
+}
+
+function mapTileUrl(zoom: number, x: number, y: number) {
+  const tileCount = 2 ** zoom;
+  const wrappedX = ((x % tileCount) + tileCount) % tileCount;
+  const clampedY = Math.max(0, Math.min(tileCount - 1, y));
+
+  return `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${clampedY}.png`;
+}
+
+function printableRouteMap(stops: DayPlan["agenda"]) {
+  const points = routeCoordinates(stops);
+  if (!points.length) return null;
+
+  const projectedByZoom = Array.from({ length: 10 }, (_, index) => 14 - index).map((zoom) => {
+    const projected = points.map((point) => ({ ...point, projected: mercatorPoint(point.coordinate, zoom) }));
+    const xs = projected.map((point) => point.projected.x);
+    const ys = projected.map((point) => point.projected.y);
+
+    return {
+      zoom,
+      projected,
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minY: Math.min(...ys),
+      maxY: Math.max(...ys),
+    };
+  });
+
+  const mapFrame =
+    projectedByZoom.find(
+      (frame) =>
+        frame.maxX - frame.minX <= PRINT_MAP_WIDTH - 130 &&
+        frame.maxY - frame.minY <= PRINT_MAP_HEIGHT - 120,
+    ) ?? projectedByZoom[projectedByZoom.length - 1];
+
+  const routeWidth = Math.max(mapFrame.maxX - mapFrame.minX, 1);
+  const routeHeight = Math.max(mapFrame.maxY - mapFrame.minY, 1);
+  const topLeftX = mapFrame.minX + routeWidth / 2 - PRINT_MAP_WIDTH / 2;
+  const topLeftY = mapFrame.minY + routeHeight / 2 - PRINT_MAP_HEIGHT / 2;
+  const minTileX = Math.floor(topLeftX / PRINT_MAP_TILE_SIZE);
+  const maxTileX = Math.floor((topLeftX + PRINT_MAP_WIDTH) / PRINT_MAP_TILE_SIZE);
+  const minTileY = Math.floor(topLeftY / PRINT_MAP_TILE_SIZE);
+  const maxTileY = Math.floor((topLeftY + PRINT_MAP_HEIGHT) / PRINT_MAP_TILE_SIZE);
+  const tiles = [];
+
+  for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
+    for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
+      tiles.push({
+        key: `${mapFrame.zoom}-${tileX}-${tileY}`,
+        left: tileX * PRINT_MAP_TILE_SIZE - topLeftX,
+        top: tileY * PRINT_MAP_TILE_SIZE - topLeftY,
+        url: mapTileUrl(mapFrame.zoom, tileX, tileY),
+      });
+    }
+  }
+
+  const markers = mapFrame.projected.map((point) => ({
     ...point,
-    x: 24 + ((point.coordinate[1] - minLng) / lngSpan) * 232,
-    y: 142 - ((point.coordinate[0] - minLat) / latSpan) * 104,
+    x: point.projected.x - topLeftX,
+    y: point.projected.y - topLeftY,
   }));
+
+  return {
+    height: PRINT_MAP_HEIGHT,
+    markers,
+    routeLine: markers.map((point) => `${point.x},${point.y}`).join(" "),
+    tiles,
+    width: PRINT_MAP_WIDTH,
+    zoom: mapFrame.zoom,
+  };
 }
 
 function directionsUrlForStops(stops: DayPlan["agenda"], fallback = "Trip route") {
@@ -3141,8 +3207,7 @@ export default function Home() {
               </section>
 
               {dataDays.map((day) => {
-                const mapPoints = routeMapGeometry(day.agenda);
-                const polyline = mapPoints.map((point) => `${point.x},${point.y}`).join(" ");
+                const printMap = printableRouteMap(day.agenda);
                 const dayRouteUrl = directionsUrlForStops(day.agenda, activeTrip.destination);
 
                 return (
@@ -3156,20 +3221,48 @@ export default function Home() {
                     <div className="trip-book-route-sheet">
                       <div className="trip-book-map">
                         <div className="trip-book-map-header">
-                          <span><Route size={15} /> Route strip map</span>
-                          <small>{mapPoints.length} mapped stops</small>
+                          <span><Route size={15} /> Printable route map</span>
+                          <small>{printMap?.markers.length ?? 0} mapped stops</small>
                         </div>
-                        {mapPoints.length ? (
-                          <svg viewBox="0 0 280 170" role="img" aria-label={day.title + " route map"}>
-                            <rect x="0" y="0" width="280" height="170" rx="10" />
-                            {mapPoints.length > 1 && <polyline points={polyline} />}
-                            {mapPoints.map((point) => (
-                              <g key={point.index} transform={`translate(${point.x} ${point.y})`}>
-                                <circle r="9" />
-                                <text textAnchor="middle" dominantBaseline="central">{point.index + 1}</text>
-                              </g>
+                        {printMap ? (
+                          <div
+                            aria-label={day.title + " printable route map"}
+                            className="trip-book-static-map"
+                            role="img"
+                          >
+                            {printMap.tiles.map((tile) => (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                alt=""
+                                aria-hidden="true"
+                                height={PRINT_MAP_TILE_SIZE}
+                                key={tile.key}
+                                loading="eager"
+                                src={tile.url}
+                                style={{ left: `${tile.left}px`, top: `${tile.top}px` }}
+                                width={PRINT_MAP_TILE_SIZE}
+                              />
                             ))}
-                          </svg>
+                            <svg
+                              aria-hidden="true"
+                              className="trip-book-map-overlay"
+                              viewBox={`0 0 ${printMap.width} ${printMap.height}`}
+                            >
+                              {printMap.markers.length > 1 && (
+                                <>
+                                  <polyline className="trip-book-route-halo" points={printMap.routeLine} />
+                                  <polyline className="trip-book-route-line" points={printMap.routeLine} />
+                                </>
+                              )}
+                              {printMap.markers.map((point) => (
+                                <g key={point.index} transform={`translate(${point.x} ${point.y})`}>
+                                  <circle r="15" />
+                                  <text textAnchor="middle" dominantBaseline="central">{point.index + 1}</text>
+                                </g>
+                              ))}
+                            </svg>
+                            <span className="trip-book-map-credit">Map data OpenStreetMap</span>
+                          </div>
                         ) : (
                           <div className="trip-book-map-empty">Add stop coordinates to include a route map.</div>
                         )}
