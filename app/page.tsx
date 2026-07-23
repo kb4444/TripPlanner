@@ -22,6 +22,8 @@ import {
   ExternalLink,
   GripVertical,
   Home as HomeIcon,
+  Image as ImageIcon,
+  Link2,
   ListChecks,
   Luggage,
   MapPin,
@@ -36,6 +38,7 @@ import {
   Settings,
   Target,
   Trash2,
+  Upload,
   Users,
   X,
 } from "lucide-react";
@@ -73,6 +76,11 @@ type Place = {
   type: string;
   note: string;
   status: string;
+  address?: string;
+  mapUrl?: string;
+  website?: string;
+  imageUrl?: string;
+  imageAlt?: string;
 };
 
 type RouteSummary = {
@@ -298,42 +306,54 @@ const places = [
     type: "Beach stop",
     note: "First Lake Michigan stop on the drive north. Walk the pier, stretch, and let the trip feel like vacation.",
     status: "Planned",
+    address: "2215 Ottawa Beach Rd, Holland, MI 49424",
+    website: "https://www.miottawa.org/Parks/holland.htm",
   },
   {
     name: "Captain Sundae",
     type: "Treat",
     note: "Maybe stop after Holland State Park if timing and energy are good.",
     status: "Maybe",
+    address: "365 Douglas Ave, Holland, MI 49424",
+    website: "https://captainsundae.com/",
   },
   {
     name: "Duck Lake",
     type: "Beach day",
     note: "Primary Monday beach day. Pack the full beach setup.",
     status: "Planned",
+    address: "3560 Memorial Dr, North Muskegon, MI 49445",
   },
   {
     name: "Michigan's Adventure",
     type: "Theme park",
     note: "Tuesday park day. Use the Cedar Point packing pattern.",
     status: "Planned",
+    address: "4750 Whitehall Rd, Muskegon, MI 49445",
+    website: "https://www.miadventure.com/",
   },
   {
     name: "Pere Marquette Beach",
     type: "Beach option",
     note: "Maybe for Wednesday Beach Day #2.",
     status: "Maybe",
+    address: "3510 Channel Dr, Muskegon, MI 49441",
   },
   {
     name: "Hobos Tavern",
     type: "Food close to house",
     note: "Purveyors of Food, Drink, and Song. Good easy dinner candidate.",
     status: "Option",
+    address: "1411 Whitehall Rd, Muskegon, MI 49445",
+    website: "https://hobostavern.com/",
   },
   {
     name: "Muskegon State Park",
     type: "Explore",
     note: "Short hike or just drive-explore close to the rental.",
     status: "Option",
+    address: "3560 Memorial Dr, North Muskegon, MI 49445",
+    website: "https://www2.dnr.state.mi.us/parksandtrails/details.aspx?id=475&type=SPRK",
   },
 ];
 
@@ -705,8 +725,28 @@ function packingSignals(data: TripData, trip?: TripRecord) {
       place.type,
       place.note,
       place.status,
+      place.address,
+      place.website,
     ])),
   ].join(" ").toLowerCase();
+}
+
+function normalizeExternalUrl(value?: string) {
+  const clean = (value ?? "").trim();
+  if (!clean) return "";
+  if (/^https?:\/\//i.test(clean)) return clean;
+  return "https://" + clean;
+}
+
+function placeMapUrl(place: Place) {
+  const directMapUrl = normalizeExternalUrl(place.mapUrl);
+  if (directMapUrl) return directMapUrl;
+  const query = [place.name, place.address].filter(Boolean).join(" ");
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(query || place.name);
+}
+
+function placeImageFor(place: Place, index: number) {
+  return place.imageUrl?.trim() || areaImages[index % areaImages.length].url;
 }
 
 function createPackingSuggestions(data: TripData, trip?: TripRecord) {
@@ -1039,6 +1079,7 @@ export default function Home() {
   const [newTemplateDraft, setNewTemplateDraft] = useState({ name: "", description: "" });
   const [showUnpackedOnly, setShowUnpackedOnly] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
+  const [previewLoadingPlace, setPreviewLoadingPlace] = useState<number | null>(null);
   const [trips, setTrips] = useState<TripRecord[]>([]);
   const [activeTripId, setActiveTripId] = useState("michigan-2026");
   const [saveState, setSaveState] = useState("Saved");
@@ -1218,7 +1259,7 @@ export default function Home() {
   const normalizedPlaceQuery = placeQuery.trim().toLowerCase();
   const visiblePlaces = dataPlaces.filter((place) =>
     !normalizedPlaceQuery ||
-    (place.name + " " + place.type + " " + place.status + " " + place.note)
+    (place.name + " " + place.type + " " + place.status + " " + place.note + " " + (place.address ?? "") + " " + (place.website ?? ""))
       .toLowerCase()
       .includes(normalizedPlaceQuery),
   );
@@ -1924,7 +1965,7 @@ export default function Home() {
       ...tripData,
       places: [
         ...dataPlaces,
-        { name: "New place", type: "Idea", status: "Maybe", note: "" },
+        { name: "", type: "Idea", status: "Maybe", note: "", address: "", mapUrl: "", website: "", imageUrl: "" },
       ],
     });
     setEditMode(true);
@@ -1937,6 +1978,33 @@ export default function Home() {
         placeIndex === index ? { ...place, ...patchData } : place,
       ),
     });
+  }
+
+  function handlePlaceImageUpload(index: number, file?: File) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      updatePlace(index, {
+        imageUrl: reader.result,
+        imageAlt: dataPlaces[index]?.name ? dataPlaces[index].name + " photo" : "Uploaded place photo",
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function fetchPlaceWebsiteImage(index: number) {
+    const website = normalizeExternalUrl(dataPlaces[index]?.website);
+    if (!website) return;
+    setPreviewLoadingPlace(index);
+    fetch("/api/place-preview?url=" + encodeURIComponent(website))
+      .then((response) => response.json())
+      .then((payload: { imageUrl?: string; error?: string }) => {
+        if (payload.imageUrl) {
+          updatePlace(index, { website, imageUrl: payload.imageUrl });
+        }
+      })
+      .finally(() => setPreviewLoadingPlace((current) => (current === index ? null : current)));
   }
 
   function removePlace(index: number) {
@@ -2993,38 +3061,89 @@ export default function Home() {
             <div className="place-grid">
               {visiblePlaces.map((place) => {
                 const index = dataPlaces.findIndex((entry) => entry === place);
+                const imageUrl = placeImageFor(place, index);
+                const websiteUrl = normalizeExternalUrl(place.website);
                 return (
                 <article className="place-card" key={place.name + "-" + index}>
                   <div
                     className={"place-art art-" + (index % 3)}
                     style={{
-                      backgroundImage:
-                        'url("' + areaImages[index % areaImages.length].url + '")',
+                      backgroundImage: 'url("' + imageUrl + '")',
                     }}
                   >
                     <span>{place.status}</span>
                   </div>
                   <div className="place-copy">
                     {editMode ? (
-                      <>
-                        <input aria-label="Place status" value={place.status} onChange={(event) => updatePlace(index, { status: event.target.value })} />
-                        <input className="item-title-input" aria-label="Place name" value={place.name} onChange={(event) => updatePlace(index, { name: event.target.value })} />
-                        <input aria-label="Place type" value={place.type} onChange={(event) => updatePlace(index, { type: event.target.value })} />
-                        <textarea aria-label="Place note" value={place.note} onChange={(event) => updatePlace(index, { note: event.target.value })} />
+                      <div className="place-form">
+                        <div className="place-form-row compact">
+                          <label>
+                            Status
+                            <input aria-label="Place status" placeholder="Planned, Maybe, Option" value={place.status} onChange={(event) => updatePlace(index, { status: event.target.value })} />
+                          </label>
+                          <label>
+                            Category
+                            <input aria-label="Place type" placeholder="Beach, food, rainy day..." value={place.type} onChange={(event) => updatePlace(index, { type: event.target.value })} />
+                          </label>
+                        </div>
+                        <label>
+                          Place name
+                          <input className="item-title-input" aria-label="Place name" placeholder="Hobos Tavern" value={place.name} onChange={(event) => updatePlace(index, { name: event.target.value })} />
+                        </label>
+                        <label>
+                          Street address or searchable map location
+                          <input aria-label="Place address" placeholder="Street address, park name, or coordinates" value={place.address ?? ""} onChange={(event) => updatePlace(index, { address: event.target.value })} />
+                          <small>Used for View on map when there is not a specific Maps link.</small>
+                        </label>
+                        <label>
+                          Google Maps link, Apple Maps link, or exact map URL
+                          <input aria-label="Place map URL" placeholder="Optional: paste a map share link" value={place.mapUrl ?? ""} onChange={(event) => updatePlace(index, { mapUrl: event.target.value })} />
+                          <small>Optional. Use this when you want the map button to open one exact place.</small>
+                        </label>
+                        <label>
+                          Website
+                          <input aria-label="Place website" placeholder="https://example.com" value={place.website ?? ""} onChange={(event) => updatePlace(index, { website: event.target.value })} onBlur={() => {
+                            const normalizedWebsite = normalizeExternalUrl(place.website);
+                            if (normalizedWebsite && normalizedWebsite !== place.website) updatePlace(index, { website: normalizedWebsite });
+                          }} />
+                          <small>Used for the website button and to look for a preview image.</small>
+                        </label>
+                        <div className="place-image-tools">
+                          <button className="button quiet" disabled={!place.website || previewLoadingPlace === index} onClick={() => fetchPlaceWebsiteImage(index)} type="button">
+                            <ImageIcon size={16} /> {previewLoadingPlace === index ? "Looking..." : "Grab site image"}
+                          </button>
+                          <label className="button quiet upload-button">
+                            <Upload size={16} /> Upload image
+                            <input accept="image/*" aria-label="Upload place image" type="file" onChange={(event) => handlePlaceImageUpload(index, event.target.files?.[0])} />
+                          </label>
+                        </div>
+                        <label>
+                          Image URL
+                          <input aria-label="Place image URL" placeholder="https://..." value={place.imageUrl ?? ""} onChange={(event) => updatePlace(index, { imageUrl: event.target.value })} />
+                          <small>Paste an image URL, upload one, or use Grab site image.</small>
+                        </label>
+                        <label>
+                          Notes
+                          <textarea aria-label="Place note" placeholder="Why this place is worth saving, timing notes, food ideas, backup plans..." value={place.note} onChange={(event) => updatePlace(index, { note: event.target.value })} />
+                        </label>
                         <button className="delete-button" onClick={() => removePlace(index)} type="button"><Trash2 size={15} /> Remove</button>
-                      </>
+                      </div>
                     ) : (
                       <>
                         <span className="place-type">{place.type}</span>
                         <h3>{place.name}</h3>
+                        {place.address ? <small className="place-address">{place.address}</small> : null}
                         <p>{place.note}</p>
-                        <a
-                          href={"https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(place.name)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View on map <ArrowRight size={15} />
-                        </a>
+                        <div className="place-links">
+                          <a href={placeMapUrl(place)} target="_blank" rel="noreferrer">
+                            <MapPin size={15} /> View on map <ArrowRight size={15} />
+                          </a>
+                          {websiteUrl ? (
+                            <a href={websiteUrl} target="_blank" rel="noreferrer">
+                              <Link2 size={15} /> Website <ExternalLink size={14} />
+                            </a>
+                          ) : null}
+                        </div>
                       </>
                     )}
                   </div>
@@ -3518,7 +3637,9 @@ export default function Home() {
                       <div className="trip-book-place" key={place.name + place.type}>
                         <strong>{place.name}</strong>
                         <small>{place.type} · {place.status}</small>
+                        {place.address ? <small>{place.address}</small> : null}
                         <p>{place.note}</p>
+                        {place.website ? <small>{normalizeExternalUrl(place.website)}</small> : null}
                       </div>
                     ))}
                   </div>

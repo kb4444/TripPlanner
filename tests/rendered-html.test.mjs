@@ -10,6 +10,7 @@ const tripsApiUrl = new URL("../app/api/trips/route.ts", import.meta.url);
 const tripApiUrl = new URL("../app/api/trips/[id]/route.ts", import.meta.url);
 const tripScaffoldUrl = new URL("../app/trip-scaffold.ts", import.meta.url);
 const templatesApiUrl = new URL("../app/api/packing-templates/route.ts", import.meta.url);
+const placePreviewApiUrl = new URL("../app/api/place-preview/route.ts", import.meta.url);
 
 test("ships the trip library and editable planning surfaces", async () => {
   const page = await readFile(pageUrl, "utf8");
@@ -18,8 +19,8 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Everything for the next adventure, in one place/);
   assert.match(page, /export default function Home/);
   assert.match(page, /APP_VERSION/);
-  assert.match(version, /APP_VERSION = "v31"/);
-  assert.match(version, /APP_PACKAGE_VERSION = "0\.1\.31"/);
+  assert.match(version, /APP_VERSION = "v32"/);
+  assert.match(version, /APP_PACKAGE_VERSION = "0\.1\.32"/);
   assert.match(page, /setEditMode/);
   assert.match(page, /addAgendaItem/);
   assert.match(page, /addChecklistItem/);
@@ -40,6 +41,15 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Desc \/ note/);
   assert.match(page, /packingGroups\?: string/);
   assert.match(page, /Search saved places/);
+  assert.match(page, /Street address or searchable map location/);
+  assert.match(page, /Google Maps link, Apple Maps link, or exact map URL/);
+  assert.match(page, /Grab site image/);
+  assert.match(page, /Upload image/);
+  assert.match(page, /placeMapUrl/);
+  assert.match(page, /fetchPlaceWebsiteImage/);
+  assert.match(page, /handlePlaceImageUpload/);
+  assert.match(page, /place\.address/);
+  assert.match(page, /place\.website/);
   assert.match(page, /autosaveReady/);
   assert.match(page, /Trip settings/);
   assert.match(page, /Trip book/);
@@ -192,4 +202,13 @@ test("new trips keep trip-owned packing and central templates", async () => {
   assert.match(templatesApi, /Camping/);
   assert.match(templatesApi, /Amusement Park/);
   assert.match(templatesApi, /app_settings/);
+});
+
+test("places can fetch website preview images", async () => {
+  const placePreviewApi = await readFile(placePreviewApiUrl, "utf8");
+
+  assert.match(placePreviewApi, /og:image/);
+  assert.match(placePreviewApi, /twitter:image/);
+  assert.match(placePreviewApi, /new URL\(image, response\.url/);
+  assert.match(placePreviewApi, /Website URL is required/);
 });
