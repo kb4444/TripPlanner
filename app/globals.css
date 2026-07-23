@@ -1623,6 +1623,12 @@ button {
   stroke-width: 7;
 }
 
+.trip-book-stop-connector {
+  stroke: rgba(217, 79, 55, 0.55);
+  stroke-dasharray: 10 10;
+  stroke-width: 5;
+}
+
 .trip-book-map-overlay circle {
   fill: #142b29;
   stroke: white;
@@ -1667,6 +1673,18 @@ button {
   font-size: 0.82rem;
   margin: 0 0 8px;
   text-transform: uppercase;
+}
+
+.trip-book-route-meta {
+  background: #eaf3f0;
+  border: 1px solid #c8d8d2;
+  border-radius: 999px;
+  color: #2e8178;
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 780;
+  margin-bottom: 10px;
+  padding: 6px 10px;
 }
 
 .trip-book-route-notes p,

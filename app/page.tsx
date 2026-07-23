@@ -81,6 +81,10 @@ type RouteSummary = {
   status: "ready" | "partial" | "loading" | "error";
 };
 
+type TripBookRoute = RouteSummary & {
+  coordinates: [number, number][];
+};
+
 type PlaceSuggestion = {
   id: string;
   name: string;
@@ -543,18 +547,33 @@ function mapTileUrl(zoom: number, x: number, y: number) {
   return `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${clampedY}.png`;
 }
 
-function printableRouteMap(stops: DayPlan["agenda"]) {
+function osrmRouteUrl(points: { coordinate: [number, number] }[]) {
+  const routePath = points.map(({ coordinate }) => coordinate[1] + "," + coordinate[0]).join(";");
+
+  return (
+    "https://router.project-osrm.org/route/v1/driving/" +
+    routePath +
+    "?overview=full&geometries=geojson&steps=false"
+  );
+}
+
+function printableRouteMap(stops: DayPlan["agenda"], roadRoute?: [number, number][]) {
   const points = routeCoordinates(stops);
   if (!points.length) return null;
+  const roadPoints = roadRoute?.length ? roadRoute : [];
+  const allCoordinates = [...points.map((point) => point.coordinate), ...roadPoints];
 
-  const projectedByZoom = Array.from({ length: 10 }, (_, index) => 14 - index).map((zoom) => {
+  const projectedByZoom = Array.from({ length: 13 }, (_, index) => 14 - index).map((zoom) => {
     const projected = points.map((point) => ({ ...point, projected: mercatorPoint(point.coordinate, zoom) }));
-    const xs = projected.map((point) => point.projected.x);
-    const ys = projected.map((point) => point.projected.y);
+    const projectedRoad = roadPoints.map((coordinate) => mercatorPoint(coordinate, zoom));
+    const boundsPoints = allCoordinates.map((coordinate) => mercatorPoint(coordinate, zoom));
+    const xs = boundsPoints.map((point) => point.x);
+    const ys = boundsPoints.map((point) => point.y);
 
     return {
       zoom,
       projected,
+      projectedRoad,
       minX: Math.min(...xs),
       maxX: Math.max(...xs),
       minY: Math.min(...ys),
@@ -595,10 +614,12 @@ function printableRouteMap(stops: DayPlan["agenda"]) {
     x: point.projected.x - topLeftX,
     y: point.projected.y - topLeftY,
   }));
+  const roadLine = mapFrame.projectedRoad.map((point) => `${point.x - topLeftX},${point.y - topLeftY}`).join(" ");
 
   return {
     height: PRINT_MAP_HEIGHT,
     markers,
+    roadLine,
     routeLine: markers.map((point) => `${point.x},${point.y}`).join(" "),
     tiles,
     width: PRINT_MAP_WIDTH,
@@ -645,6 +666,14 @@ function blankRouteSummary(): RouteSummary {
     pointCount: 0,
     status: "partial",
   };
+}
+
+function tripBookRouteKey(day: DayPlan, index: number) {
+  const coordinates = routeCoordinates(day.agenda)
+    .map((point) => point.coordinate.join(","))
+    .join("|");
+
+  return [index, day.label, day.date, day.title, coordinates].join("::");
 }
 
 function reorderList<T>(items: T[], fromIndex: number, toIndex: number) {
@@ -1029,6 +1058,7 @@ export default function Home() {
   const [showNewTrip, setShowNewTrip] = useState(false);
   const [showTripSettings, setShowTripSettings] = useState(false);
   const [showTripBook, setShowTripBook] = useState(false);
+  const [tripBookRoutes, setTripBookRoutes] = useState<Record<string, TripBookRoute>>({});
   const [adminTab, setAdminTab] = useState<"trips" | "templates">("trips");
   const [reseedTemplateId, setReseedTemplateId] = useState("");
   const [newTrip, setNewTrip] = useState({ title: "", destination: "", dateRange: "", packingTemplateId: "" });
@@ -1153,9 +1183,9 @@ export default function Home() {
 
   const activeTrip = trips.find((trip) => trip.id === activeTripId);
   const tripData = activeTrip?.data ?? defaultTripData;
-  const dataDays = tripData.days ?? [];
-  const dataChecklist = tripData.checklist ?? [];
-  const dataPlaces = tripData.places ?? [];
+  const dataDays = tripData.days;
+  const dataChecklist = tripData.checklist;
+  const dataPlaces = tripData.places;
   const dataTemplate = tripData.tripTemplate?.length ? tripData.tripTemplate : tripTemplate;
   const tripSettings = tripData.settings ?? {};
   const activeHeroImage = tripSettings.heroImage?.trim() || areaImages[0].url;
@@ -1231,9 +1261,69 @@ export default function Home() {
   }));
   const mappedDayCount = dataDays.filter((day) => routeCoordinates(day.agenda).length > 0).length;
 
+  useEffect(() => {
+    if (!showTripBook) return;
+    const candidates = dataDays
+      .map((day, index) => ({
+        day,
+        index,
+        key: tripBookRouteKey(day, index),
+        points: routeCoordinates(day.agenda),
+      }))
+      .filter((item) => item.points.length > 1);
+
+    if (!candidates.length) return;
+
+    const controller = new AbortController();
+
+    candidates.forEach((item) => {
+      fetch(osrmRouteUrl(item.points), { signal: controller.signal })
+        .then((response) => {
+          if (!response.ok) throw new Error("Route request failed");
+          return response.json() as Promise<{
+            routes?: {
+              distance?: number;
+              duration?: number;
+              geometry?: { coordinates?: [number, number][] };
+            }[];
+          }>;
+        })
+        .then((payload) => {
+          const route = payload.routes?.[0];
+          const geometry = route?.geometry?.coordinates;
+          if (!route || !geometry?.length) throw new Error("Route unavailable");
+
+          setTripBookRoutes((current) => ({
+            ...current,
+            [item.key]: {
+              coordinates: geometry.map(([lng, lat]) => [lat, lng]),
+              distanceMiles: (route.distance ?? 0) / 1609.344,
+              durationMinutes: (route.duration ?? 0) / 60,
+              pointCount: item.points.length,
+              status: "ready",
+            },
+          }));
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          setTripBookRoutes((current) => ({
+            ...current,
+            [item.key]: {
+              ...blankRouteSummary(),
+              coordinates: [],
+              pointCount: item.points.length,
+              status: "error",
+            },
+          }));
+        });
+    });
+
+    return () => controller.abort();
+  }, [activeTripId, dataDays, showTripBook]);
+
   function printTripBook() {
     setShowTripBook(true);
-    window.setTimeout(() => window.print(), 150);
+    window.setTimeout(() => window.print(), 900);
   }
 
   function navigate(view: string) {
@@ -3206,9 +3296,23 @@ export default function Home() {
                 </div>
               </section>
 
-              {dataDays.map((day) => {
-                const printMap = printableRouteMap(day.agenda);
+              {dataDays.map((day, dayIndex) => {
+                const routeKey = tripBookRouteKey(day, dayIndex);
+                const roadRoute = tripBookRoutes[routeKey];
+                const printMap = printableRouteMap(
+                  day.agenda,
+                  roadRoute?.status === "ready" ? roadRoute.coordinates : undefined,
+                );
                 const dayRouteUrl = directionsUrlForStops(day.agenda, activeTrip.destination);
+                const mappedStops = printMap?.markers.length ?? 0;
+                const routeStatus =
+                  roadRoute?.status === "ready"
+                    ? `${formatRouteDuration(roadRoute.durationMinutes)} · ${formatRouteDistance(roadRoute.distanceMiles)}`
+                    : roadRoute?.status === "loading" || (showTripBook && mappedStops > 1 && !roadRoute)
+                      ? "Calculating road route"
+                      : roadRoute?.status === "error"
+                        ? "Road route unavailable"
+                        : `${mappedStops} mapped stops`;
 
                 return (
                   <section className="trip-book-page trip-book-day" key={day.label + "-" + day.title}>
@@ -3222,7 +3326,7 @@ export default function Home() {
                       <div className="trip-book-map">
                         <div className="trip-book-map-header">
                           <span><Route size={15} /> Printable route map</span>
-                          <small>{printMap?.markers.length ?? 0} mapped stops</small>
+                          <small>{routeStatus}</small>
                         </div>
                         {printMap ? (
                           <div
@@ -3249,10 +3353,17 @@ export default function Home() {
                               viewBox={`0 0 ${printMap.width} ${printMap.height}`}
                             >
                               {printMap.markers.length > 1 && (
-                                <>
-                                  <polyline className="trip-book-route-halo" points={printMap.routeLine} />
-                                  <polyline className="trip-book-route-line" points={printMap.routeLine} />
-                                </>
+                                printMap.roadLine ? (
+                                  <>
+                                    <polyline className="trip-book-route-halo" points={printMap.roadLine} />
+                                    <polyline className="trip-book-route-line" points={printMap.roadLine} />
+                                  </>
+                                ) : (
+                                  roadRoute?.status !== "loading" &&
+                                  roadRoute?.status !== "error" && (
+                                    <polyline className="trip-book-stop-connector" points={printMap.routeLine} />
+                                  )
+                                )
                               )}
                               {printMap.markers.map((point) => (
                                 <g key={point.index} transform={`translate(${point.x} ${point.y})`}>
@@ -3269,7 +3380,14 @@ export default function Home() {
                       </div>
                       <div className="trip-book-route-notes">
                         <h3>Route Notes</h3>
+                        {roadRoute?.status === "ready" && (
+                          <div className="trip-book-route-meta">
+                            {formatRouteDuration(roadRoute.durationMinutes)} drive · {formatRouteDistance(roadRoute.distanceMiles)}
+                          </div>
+                        )}
                         <p>{day.drive || "No route notes yet."}</p>
+                        {roadRoute?.status === "loading" && <p>Calculating the printable road route.</p>}
+                        {roadRoute?.status === "error" && <p>Road route could not be calculated for this set of stops.</p>}
                         <a href={dayRouteUrl} target="_blank" rel="noreferrer">Open live map route</a>
                       </div>
                     </div>
