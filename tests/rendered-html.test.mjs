@@ -4,6 +4,8 @@ import test from "node:test";
 
 const pageUrl = new URL("../app/page.tsx", import.meta.url);
 const cssUrl = new URL("../app/globals.css", import.meta.url);
+const layoutUrl = new URL("../app/layout.tsx", import.meta.url);
+const versionUrl = new URL("../app/app-version.ts", import.meta.url);
 const tripsApiUrl = new URL("../app/api/trips/route.ts", import.meta.url);
 const tripApiUrl = new URL("../app/api/trips/[id]/route.ts", import.meta.url);
 const tripScaffoldUrl = new URL("../app/trip-scaffold.ts", import.meta.url);
@@ -11,9 +13,13 @@ const templatesApiUrl = new URL("../app/api/packing-templates/route.ts", import.
 
 test("ships the trip library and editable planning surfaces", async () => {
   const page = await readFile(pageUrl, "utf8");
+  const version = await readFile(versionUrl, "utf8");
 
   assert.match(page, /Everything for the next adventure, in one place/);
   assert.match(page, /export default function Home/);
+  assert.match(page, /APP_VERSION/);
+  assert.match(version, /APP_VERSION = "v30"/);
+  assert.match(version, /APP_PACKAGE_VERSION = "0\.1\.30"/);
   assert.match(page, /setEditMode/);
   assert.match(page, /addAgendaItem/);
   assert.match(page, /addChecklistItem/);
@@ -106,6 +112,7 @@ test("responsive visual system includes mobile navigation", async () => {
   const css = await readFile(cssUrl, "utf8");
 
   assert.match(css, /\.sidebar\.is-open/);
+  assert.match(css, /\.app-version/);
   assert.match(css, /@media \(max-width: 900px\)/);
   assert.match(css, /\.route-workspace/);
   assert.match(css, /leaflet\/dist\/leaflet\.css/);
@@ -149,6 +156,15 @@ test("responsive visual system includes mobile navigation", async () => {
   assert.match(css, /\.coordinate-fields/);
   assert.match(css, /\.trip-feature/);
   assert.match(css, /conic-gradient/);
+});
+
+test("app metadata exposes the visible build version", async () => {
+  const layout = await readFile(layoutUrl, "utf8");
+
+  assert.match(layout, /APP_VERSION/);
+  assert.match(layout, /APP_PACKAGE_VERSION/);
+  assert.match(layout, /Burns Travel Planner " \+ APP_VERSION/);
+  assert.match(layout, /Build " \+ APP_PACKAGE_VERSION/);
 });
 
 test("new trips keep trip-owned packing and central templates", async () => {

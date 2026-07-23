@@ -39,6 +39,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { APP_VERSION } from "./app-version";
 
 type DayPlan = {
   date: string;
@@ -2031,8 +2032,13 @@ export default function Home() {
           </button>
         )}
         <div className="sidebar-footer">
-          <span className={saveState === "Saved" ? "save-dot" : "save-dot is-saving"} />
-          {saveState}
+          <span>
+            <span className={saveState === "Saved" ? "save-dot" : "save-dot is-saving"} />
+            {saveState}
+          </span>
+          <span className="app-version" title={"Burns Travel Planner " + APP_VERSION}>
+            {APP_VERSION}
+          </span>
         </div>
       </aside>
 
