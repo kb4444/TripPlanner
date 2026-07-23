@@ -84,7 +84,10 @@ test("drive days include maps, directions, and a stop timeline", async () => {
   assert.match(page, /No route stops yet/);
   assert.match(page, /router\.project-osrm\.org\/route\/v1\/driving/);
   assert.match(page, /Road route/);
-  assert.match(page, /Show road route/);
+  assert.match(page, /Show full map/);
+  assert.match(page, /showFullDayMap/);
+  assert.match(page, /is-map-clickable/);
+  assert.match(page, /role=\{isDriveDay && !editMode \? "button" : undefined\}/);
   assert.match(page, /focusRouteRequest/);
   assert.match(page, /Hide map/);
   assert.match(page, /Show map/);
@@ -113,6 +116,7 @@ test("responsive visual system includes mobile navigation", async () => {
   assert.match(css, /\.route-empty-state/);
   assert.match(css, /\.location-suggestions/);
   assert.match(css, /\.route-focus-button/);
+  assert.match(css, /\.timeline-full-map-button/);
   assert.match(css, /\.route-collapsed-panel/);
   assert.match(css, /\.search-control/);
   assert.match(css, /\.add-section-panel/);
@@ -138,6 +142,7 @@ test("responsive visual system includes mobile navigation", async () => {
   assert.match(css, /\.private-share-panel/);
   assert.match(css, /\.drag-handle/);
   assert.match(css, /\.timeline-item\.is-map-selected/);
+  assert.match(css, /\.timeline-item\.is-map-clickable/);
   assert.match(css, /\.selected-stop-label/);
   assert.match(css, /\.map-editor/);
   assert.match(css, /\.day-map-toggle/);

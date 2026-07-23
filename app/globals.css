@@ -1197,6 +1197,10 @@ button {
   opacity: 0.48;
 }
 
+.timeline-full-map-button {
+  flex: 0 0 auto;
+}
+
 .map-editor {
   background: rgba(255, 255, 255, 0.065);
   border: 1px solid rgba(255, 255, 255, 0.11);
@@ -1828,6 +1832,20 @@ button {
   grid-template-columns: 94px 24px minmax(0, 1fr);
   min-height: 112px;
   transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.timeline-item.is-map-clickable {
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.timeline-item.is-map-clickable:hover {
+  background: rgba(46, 129, 120, 0.07);
+}
+
+.timeline-item.is-map-clickable:focus-visible {
+  box-shadow: 0 0 0 3px rgba(46, 129, 120, 0.2);
+  outline: none;
 }
 
 .timeline-item.is-map-selected {

@@ -1587,6 +1587,11 @@ export default function Home() {
     setMapApplyNote("");
   }
 
+  function showFullDayMap() {
+    setHiddenMapDays((current) => ({ ...current, [mapVisibilityKey]: false }));
+    setFocusRouteRequest((count) => count + 1);
+  }
+
   function applyMapDraftToStop() {
     if (!mapDraft.trim()) return;
     const coordinates = parseCoordinates(mapDraft);
@@ -2386,12 +2391,12 @@ export default function Home() {
                       <button
                         className="button route-focus-button"
                         disabled={routeSummary.status !== "ready"}
-                        onClick={() => setFocusRouteRequest((count) => count + 1)}
+                        onClick={showFullDayMap}
                         type="button"
                       >
                         <Route size={16} />
                         {routeSummary.status === "ready"
-                          ? "Show road route"
+                          ? "Show full map"
                           : routeSummary.status === "loading"
                             ? "Calculating route"
                             : "Map 2 stops first"}
@@ -2492,6 +2497,21 @@ export default function Home() {
                   <div className="timeline-panel">
                     <div className="section-title">
                       <div><span className="kicker">Day plan</span><h3>Timeline</h3></div>
+                      {isDriveDay && !editMode && (
+                        <button
+                          className="button quiet timeline-full-map-button"
+                          disabled={routeSummary.status !== "ready"}
+                          onClick={showFullDayMap}
+                          type="button"
+                        >
+                          <Route size={16} />
+                          {routeSummary.status === "ready"
+                            ? "Show full map"
+                            : routeSummary.status === "loading"
+                              ? "Calculating route"
+                              : "Map 2 stops first"}
+                        </button>
+                      )}
                       {editMode && (
                         <button className="button quiet" onClick={addAgendaItem} type="button">
                           <Plus size={16} /> Add stop
@@ -2501,8 +2521,19 @@ export default function Home() {
                     <div className="timeline">
                       {currentDay.agenda.map((item, index) => (
                         <article
-                          className={isDriveDay && selectedStopIndex === index ? "timeline-item is-map-selected" : "timeline-item"}
+                          className={
+                            [
+                              "timeline-item",
+                              isDriveDay && !editMode ? "is-map-clickable" : "",
+                              isDriveDay && selectedStopIndex === index ? "is-map-selected" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")
+                          }
                           draggable={editMode}
+                          onClick={() => {
+                            if (isDriveDay && !editMode) selectMapStop(index);
+                          }}
                           onDragStart={() => setDraggingAgendaIndex(index)}
                           onDragOver={(event) => {
                             if (editMode) event.preventDefault();
@@ -2512,7 +2543,16 @@ export default function Home() {
                             moveAgendaItem(draggingAgendaIndex, index);
                             setDraggingAgendaIndex(null);
                           }}
+                          onKeyDown={(event) => {
+                            if (!isDriveDay || editMode) return;
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              selectMapStop(index);
+                            }
+                          }}
                           key={item.time + "-" + index}
+                          role={isDriveDay && !editMode ? "button" : undefined}
+                          tabIndex={isDriveDay && !editMode ? 0 : undefined}
                         >
                           <div className="timeline-time">
                             {editMode ? (
@@ -2598,9 +2638,9 @@ export default function Home() {
                                 <div className="timeline-title-row">
                                   <h4>{item.title}</h4>
                                   {isDriveDay && (
-                                    <button className="map-link" onClick={() => selectMapStop(index)} type="button">
+                                    <span className="map-link">
                                       <MapPin size={14} /> {selectedStopIndex === index ? "Selected for map" : "Show on map"}
-                                    </button>
+                                    </span>
                                   )}
                                 </div>
                                 <p>{item.detail}</p>
