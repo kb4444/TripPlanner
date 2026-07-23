@@ -3245,7 +3245,13 @@ export default function Home() {
       </section>
 
       {showTripBook && activeTrip && (
-        <div className="trip-book-backdrop" role="presentation">
+        <div
+          className="trip-book-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setShowTripBook(false);
+          }}
+          role="presentation"
+        >
           <section className="trip-book" aria-label="Trip book PDF preview">
             <div className="trip-book-toolbar">
               <div>

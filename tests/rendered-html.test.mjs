@@ -39,6 +39,7 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Trip book/);
   assert.match(page, /Print \/ save PDF/);
   assert.match(page, /AAA-style trip book/);
+  assert.match(page, /event\.target === event\.currentTarget/);
   assert.match(page, /printableRouteMap/);
   assert.match(page, /osrmRouteUrl/);
   assert.match(page, /tripBookRoutes/);
