@@ -3395,7 +3395,12 @@ export default function Home() {
                                 key={tile.key}
                                 loading="eager"
                                 src={tile.url}
-                                style={{ left: `${tile.left}px`, top: `${tile.top}px` }}
+                                style={{
+                                  height: `${(PRINT_MAP_TILE_SIZE / printMap.height) * 100}%`,
+                                  left: `${(tile.left / printMap.width) * 100}%`,
+                                  top: `${(tile.top / printMap.height) * 100}%`,
+                                  width: `${(PRINT_MAP_TILE_SIZE / printMap.width) * 100}%`,
+                                }}
                                 width={PRINT_MAP_TILE_SIZE}
                               />
                             ))}

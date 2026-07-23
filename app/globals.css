@@ -1616,10 +1616,8 @@ button {
 }
 
 .trip-book-static-map img {
-  height: 256px;
   image-rendering: auto;
   position: absolute;
-  width: 256px;
 }
 
 .trip-book-map-overlay {

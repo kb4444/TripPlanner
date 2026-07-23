@@ -18,8 +18,8 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Everything for the next adventure, in one place/);
   assert.match(page, /export default function Home/);
   assert.match(page, /APP_VERSION/);
-  assert.match(version, /APP_VERSION = "v30"/);
-  assert.match(version, /APP_PACKAGE_VERSION = "0\.1\.30"/);
+  assert.match(version, /APP_VERSION = "v31"/);
+  assert.match(version, /APP_PACKAGE_VERSION = "0\.1\.31"/);
   assert.match(page, /setEditMode/);
   assert.match(page, /addAgendaItem/);
   assert.match(page, /addChecklistItem/);
@@ -51,6 +51,8 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /tripBookRoutes/);
   assert.match(page, /Calculating road route/);
   assert.match(page, /tile\.openstreetmap\.org/);
+  assert.match(page, /PRINT_MAP_TILE_SIZE \/ printMap\.width/);
+  assert.match(page, /PRINT_MAP_TILE_SIZE \/ printMap\.height/);
   assert.match(page, /Map data OpenStreetMap/);
   assert.match(page, /Clone as template/);
   assert.match(page, /Private-only share prep/);
