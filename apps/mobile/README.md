@@ -6,7 +6,7 @@ The first TestFlight build intentionally reuses the hosted planner API:
 
 - API base: `https://burns-travel-planner.kyleburns626647.chatgpt.site`
 - Native screens: Today, Itinerary, Packing, Places, Notes
-- Offline cache: last fetched trip data is stored on device
+- Session cache: fetched trip data stays available while the app is open
 - Sync today: packing toggles and notes write back to the hosted API
 
 ## Local Commands

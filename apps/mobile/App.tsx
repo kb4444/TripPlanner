@@ -1,4 +1,3 @@
-import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -9,6 +8,7 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  StatusBar,
   Text,
   TextInput,
   View,
@@ -155,7 +155,7 @@ export default function App() {
   if (loading && !activeTrip) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="light" />
+        <StatusBar barStyle="light-content" />
         <View style={styles.loadingScreen}>
           <Text style={styles.brand}>Burns Travel</Text>
           <ActivityIndicator color="#ec7357" />
@@ -167,7 +167,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+      <StatusBar barStyle="light-content" />
       <View style={styles.header}>
         <View>
           <Text style={styles.kicker}>Family trip mode</Text>
