@@ -1106,6 +1106,7 @@ export default function Home() {
   const [showUnpackedOnly, setShowUnpackedOnly] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
   const [previewLoadingPlace, setPreviewLoadingPlace] = useState<number | null>(null);
+  const [editingPlaceIndex, setEditingPlaceIndex] = useState<number | null>(null);
   const [trips, setTrips] = useState<TripRecord[]>([]);
   const [activeTripId, setActiveTripId] = useState("michigan-2026");
   const [saveState, setSaveState] = useState("Saved");
@@ -1471,6 +1472,8 @@ export default function Home() {
     setActiveView(view);
     setMobileNav(false);
     setEditMode(false);
+    setEditingPlaceIndex(null);
+    setPlaceLocationSearch({ index: null, query: "", results: [], status: "idle" });
   }
 
   function selectTrip(trip: TripRecord, open = false) {
@@ -2080,6 +2083,7 @@ export default function Home() {
   }
 
   function addPlace() {
+    const nextIndex = dataPlaces.length;
     saveTripData({
       ...tripData,
       places: [
@@ -2087,7 +2091,7 @@ export default function Home() {
         { name: "", type: "Idea", status: "Maybe", note: "", address: "", mapUrl: "", website: "", imageUrl: "" },
       ],
     });
-    setEditMode(true);
+    setEditingPlaceIndex(nextIndex);
   }
 
   function updatePlace(index: number, patchData: Partial<Place>) {
@@ -2131,6 +2135,12 @@ export default function Home() {
       ...tripData,
       places: dataPlaces.filter((_, placeIndex) => placeIndex !== index),
     });
+    setEditingPlaceIndex((current) => {
+      if (current === null) return null;
+      if (current === index) return null;
+      return current > index ? current - 1 : current;
+    });
+    setPlaceLocationSearch({ index: null, query: "", results: [], status: "idle" });
   }
 
   function createTrip() {
@@ -2259,7 +2269,7 @@ export default function Home() {
             </div>
           </div>
           <div className="topbar-actions">
-            {activeView !== "home" && (
+            {activeView !== "home" && activeView !== "places" && (
               <button
                 className={editMode ? "button secondary is-active" : "button secondary"}
                 onClick={() => setEditMode((value) => !value)}
@@ -3182,8 +3192,9 @@ export default function Home() {
                 const index = dataPlaces.findIndex((entry) => entry === place);
                 const imageUrl = placeImageFor(place, index);
                 const websiteUrl = normalizeExternalUrl(place.website);
+                const isEditingPlace = editingPlaceIndex === index;
                 return (
-                <article className="place-card" key={place.name + "-" + index}>
+                <article className={isEditingPlace ? "place-card is-editing" : "place-card"} key={place.name + "-" + index}>
                   <div
                     className={"place-art art-" + (index % 3)}
                     style={{
@@ -3193,8 +3204,21 @@ export default function Home() {
                     <span>{place.status}</span>
                   </div>
                   <div className="place-copy">
-                    {editMode ? (
+                    {isEditingPlace ? (
                       <div className="place-form">
+                        <div className="place-card-actions">
+                          <span>Editing this place</span>
+                          <button
+                            className="button secondary compact-button"
+                            onClick={() => {
+                              setEditingPlaceIndex(null);
+                              setPlaceLocationSearch({ index: null, query: "", results: [], status: "idle" });
+                            }}
+                            type="button"
+                          >
+                            <Check size={16} /> Done
+                          </button>
+                        </div>
                         <div className="place-form-row compact">
                           <label>
                             Status
@@ -3303,7 +3327,19 @@ export default function Home() {
                       </div>
                     ) : (
                       <>
-                        <span className="place-type">{place.type}</span>
+                        <div className="place-card-actions">
+                          <span className="place-type">{place.type}</span>
+                          <button
+                            className="button quiet compact-button"
+                            onClick={() => {
+                              setEditingPlaceIndex(index);
+                              setPlaceLocationSearch({ index: null, query: "", results: [], status: "idle" });
+                            }}
+                            type="button"
+                          >
+                            <Edit3 size={15} /> Edit
+                          </button>
+                        </div>
                         <h3>{place.name}</h3>
                         {place.address ? <small className="place-address">{place.address}</small> : null}
                         <p>{place.note}</p>
