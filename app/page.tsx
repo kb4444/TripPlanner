@@ -546,6 +546,24 @@ function routeCoordinates(stops: DayPlan["agenda"]) {
     );
 }
 
+function tripSearchBias(data: TripData, trip?: TripRecord): [number, number] {
+  const tripCoordinates = (data.days ?? []).flatMap((day) =>
+    (day.agenda ?? [])
+      .map((item) => stopCoordinate(item))
+      .filter((coordinate): coordinate is [number, number] => Boolean(coordinate)),
+  );
+
+  if (tripCoordinates.length) {
+    const sums = tripCoordinates.reduce(
+      (total, coordinate) => [total[0] + coordinate[0], total[1] + coordinate[1]] as [number, number],
+      [0, 0] as [number, number],
+    );
+    return [sums[0] / tripCoordinates.length, sums[1] / tripCoordinates.length];
+  }
+
+  return knownCoordinateForLocation([trip?.destination, trip?.title, trip?.summary].filter(Boolean).join(" ")) ?? defaultMapCenter;
+}
+
 const PRINT_MAP_WIDTH = 640;
 const PRINT_MAP_HEIGHT = 360;
 const PRINT_MAP_TILE_SIZE = 256;
@@ -743,6 +761,14 @@ function placeMapUrl(place: Place) {
   if (directMapUrl) return directMapUrl;
   const query = [place.name, place.address].filter(Boolean).join(" ");
   return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(query || place.name);
+}
+
+function suggestionAddress(suggestion: PlaceSuggestion) {
+  return suggestion.detail ? suggestion.name + ", " + suggestion.detail : suggestion.name;
+}
+
+function suggestionMapUrl(suggestion: PlaceSuggestion) {
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(suggestion.lat + "," + suggestion.lng);
 }
 
 function placeImageFor(place: Place, index: number) {
@@ -1093,6 +1119,12 @@ export default function Home() {
     results: PlaceSuggestion[];
     status: "idle" | "loading" | "ready" | "empty" | "error";
   }>({ index: null, query: "", results: [], status: "idle" });
+  const [placeLocationSearch, setPlaceLocationSearch] = useState<{
+    index: number | null;
+    query: string;
+    results: PlaceSuggestion[];
+    status: "idle" | "loading" | "ready" | "empty" | "error";
+  }>({ index: null, query: "", results: [], status: "idle" });
   const [hiddenMapDays, setHiddenMapDays] = useState<Record<string, boolean>>({});
   const [focusRouteRequest, setFocusRouteRequest] = useState(0);
   const [routeSummary, setRouteSummary] = useState<RouteSummary>(blankRouteSummary);
@@ -1110,6 +1142,15 @@ export default function Home() {
   const packedDirty = useRef(false);
   const notesDirty = useRef(false);
   const locationSearchCache = useRef(new Map<string, PlaceSuggestion[]>());
+  const placeLocationSearchCache = useRef(new Map<string, PlaceSuggestion[]>());
+  const activeTrip = trips.find((trip) => trip.id === activeTripId);
+  const tripData = activeTrip?.data ?? defaultTripData;
+  const dataDays = tripData.days;
+  const dataChecklist = tripData.checklist;
+  const dataPlaces = tripData.places;
+  const dataTemplate = tripData.tripTemplate?.length ? tripData.tripTemplate : tripTemplate;
+  const tripSettings = tripData.settings ?? {};
+  const activeHeroImage = tripSettings.heroImage?.trim() || areaImages[0].url;
 
   useEffect(() => {
     fetch("/api/trips")
@@ -1223,14 +1264,72 @@ export default function Home() {
     };
   }, [locationSearch.index, locationSearch.query]);
 
-  const activeTrip = trips.find((trip) => trip.id === activeTripId);
-  const tripData = activeTrip?.data ?? defaultTripData;
-  const dataDays = tripData.days;
-  const dataChecklist = tripData.checklist;
-  const dataPlaces = tripData.places;
-  const dataTemplate = tripData.tripTemplate?.length ? tripData.tripTemplate : tripTemplate;
-  const tripSettings = tripData.settings ?? {};
-  const activeHeroImage = tripSettings.heroImage?.trim() || areaImages[0].url;
+  useEffect(() => {
+    const query = placeLocationSearch.query.replace(/\s+/g, " ").trim();
+    if (placeLocationSearch.index === null || query.length < 3) {
+      return;
+    }
+
+    const cacheKey = query.toLowerCase();
+    const cached = placeLocationSearchCache.current.get(cacheKey);
+    if (cached) {
+      setPlaceLocationSearch((current) => ({
+        ...current,
+        results: cached,
+        status: cached.length ? "ready" : "empty",
+      }));
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setPlaceLocationSearch((current) => ({ ...current, status: "loading" }));
+      const [biasLat, biasLng] = tripSearchBias(tripData, activeTrip);
+      const params = new URLSearchParams({
+        q: query,
+        lang: "en",
+        limit: "5",
+        lat: biasLat.toFixed(6),
+        lon: biasLng.toFixed(6),
+      });
+
+      fetch(placeSearchEndpoint + "?" + params.toString(), { signal: controller.signal })
+        .then((response) => {
+          if (!response.ok) throw new Error("Place search failed");
+          return response.json() as Promise<{
+            features?: {
+              geometry?: { coordinates?: [number, number] };
+              properties?: Record<string, unknown>;
+            }[];
+          }>;
+        })
+        .then((payload) => {
+          const results = (payload.features ?? [])
+            .map(formatPhotonSuggestion)
+            .filter((result): result is PlaceSuggestion => Boolean(result));
+          placeLocationSearchCache.current.set(cacheKey, results);
+          setPlaceLocationSearch((current) =>
+            current.query.replace(/\s+/g, " ").trim().toLowerCase() === cacheKey
+              ? {
+                  ...current,
+                  results,
+                  status: results.length ? "ready" : "empty",
+                }
+              : current,
+          );
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          setPlaceLocationSearch((current) => ({ ...current, results: [], status: "error" }));
+        });
+    }, 450);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [activeTrip, placeLocationSearch.index, placeLocationSearch.query, tripData]);
+
   const currentDay = dataDays[Math.min(activeDay, Math.max(dataDays.length - 1, 0))];
   const packedCount = dataChecklist.filter((item) => packed[item.id]).length;
   const progress = dataChecklist.length ? Math.round((packedCount / dataChecklist.length) * 100) : 0;
@@ -1614,13 +1713,33 @@ export default function Home() {
 
   function selectPlaceSuggestion(index: number, suggestion: PlaceSuggestion) {
     updateAgendaItem(index, {
-      location: suggestion.detail ? suggestion.name + ", " + suggestion.detail : suggestion.name,
+      location: suggestionAddress(suggestion),
       lat: suggestion.lat,
       lng: suggestion.lng,
     });
     selectMapStop(index);
     setLocationSearch({ index: null, query: "", results: [], status: "idle" });
     setMapApplyNote("Mapped " + suggestion.name);
+  }
+
+  function updatePlaceLocationSearch(index: number, value: string) {
+    updatePlace(index, { address: value });
+    setPlaceLocationSearch({
+      index,
+      query: value,
+      results: [],
+      status: value.trim().length >= 3 ? "loading" : "idle",
+    });
+  }
+
+  function selectSavedPlaceSuggestion(index: number, suggestion: PlaceSuggestion) {
+    const currentPlace = dataPlaces[index];
+    updatePlace(index, {
+      address: suggestionAddress(suggestion),
+      mapUrl: suggestionMapUrl(suggestion),
+      name: currentPlace?.name?.trim() ? currentPlace.name : suggestion.name,
+    });
+    setPlaceLocationSearch({ index: null, query: "", results: [], status: "idle" });
   }
 
   function selectMapStop(index: number) {
@@ -3090,15 +3209,69 @@ export default function Home() {
                           Place name
                           <input className="item-title-input" aria-label="Place name" placeholder="Hobos Tavern" value={place.name} onChange={(event) => updatePlace(index, { name: event.target.value })} />
                         </label>
-                        <label>
-                          Street address or searchable map location
-                          <input aria-label="Place address" placeholder="Street address, park name, or coordinates" value={place.address ?? ""} onChange={(event) => updatePlace(index, { address: event.target.value })} />
-                          <small>Used for View on map when there is not a specific Maps link.</small>
+                        <label className="place-search-field">
+                          Address or place search
+                          <input
+                            aria-label="Place address"
+                            autoComplete="off"
+                            placeholder="Start typing a restaurant, park, address, or coordinates"
+                            value={place.address ?? ""}
+                            onChange={(event) => updatePlaceLocationSearch(index, event.target.value)}
+                            onFocus={() =>
+                              setPlaceLocationSearch({
+                                index,
+                                query: place.address ?? "",
+                                results: [],
+                                status: (place.address ?? "").trim().length >= 3 ? "loading" : "idle",
+                              })
+                            }
+                          />
+                          <small>Search here first. Picking a result fills the exact map link below.</small>
+                          {placeLocationSearch.index === index && (
+                            <div className="location-suggestions place-location-suggestions" role="listbox" aria-label="Saved place location suggestions">
+                              {placeLocationSearch.status === "idle" && (
+                                <span>Type 3+ characters to search map places.</span>
+                              )}
+                              {placeLocationSearch.status === "loading" && (
+                                <span>Searching places...</span>
+                              )}
+                              {placeLocationSearch.status === "empty" && (
+                                <span>No places found. Try adding city and state.</span>
+                              )}
+                              {placeLocationSearch.status === "error" && (
+                                <span>Place search is unavailable right now.</span>
+                              )}
+                              {placeLocationSearch.results.map((suggestion) => (
+                                <button
+                                  key={suggestion.id}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => selectSavedPlaceSuggestion(index, suggestion)}
+                                  aria-selected="false"
+                                  role="option"
+                                  type="button"
+                                >
+                                  <MapPin size={15} />
+                                  <span>
+                                    <strong>{suggestion.name}</strong>
+                                    <small>{suggestion.detail || suggestion.lat + ", " + suggestion.lng}</small>
+                                  </span>
+                                </button>
+                              ))}
+                              <button
+                                className="location-suggestions-close"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => setPlaceLocationSearch({ index: null, query: "", results: [], status: "idle" })}
+                                type="button"
+                              >
+                                Close suggestions
+                              </button>
+                            </div>
+                          )}
                         </label>
                         <label>
-                          Google Maps link, Apple Maps link, or exact map URL
+                          Exact map link
                           <input aria-label="Place map URL" placeholder="Optional: paste a map share link" value={place.mapUrl ?? ""} onChange={(event) => updatePlace(index, { mapUrl: event.target.value })} />
-                          <small>Optional. Use this when you want the map button to open one exact place.</small>
+                          <small>Optional. Filled automatically when you pick a search result; paste Google or Apple Maps links here when you have one.</small>
                         </label>
                         <label>
                           Website

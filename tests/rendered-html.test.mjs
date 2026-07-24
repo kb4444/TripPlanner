@@ -19,8 +19,8 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Everything for the next adventure, in one place/);
   assert.match(page, /export default function Home/);
   assert.match(page, /APP_VERSION/);
-  assert.match(version, /APP_VERSION = "v32"/);
-  assert.match(version, /APP_PACKAGE_VERSION = "0\.1\.32"/);
+  assert.match(version, /APP_VERSION = "v33"/);
+  assert.match(version, /APP_PACKAGE_VERSION = "0\.1\.33"/);
   assert.match(page, /setEditMode/);
   assert.match(page, /addAgendaItem/);
   assert.match(page, /addChecklistItem/);
@@ -41,8 +41,14 @@ test("ships the trip library and editable planning surfaces", async () => {
   assert.match(page, /Desc \/ note/);
   assert.match(page, /packingGroups\?: string/);
   assert.match(page, /Search saved places/);
-  assert.match(page, /Street address or searchable map location/);
-  assert.match(page, /Google Maps link, Apple Maps link, or exact map URL/);
+  assert.match(page, /Address or place search/);
+  assert.match(page, /Exact map link/);
+  assert.match(page, /Start typing a restaurant, park, address, or coordinates/);
+  assert.match(page, /Picking a result fills the exact map link below/);
+  assert.match(page, /placeLocationSearch/);
+  assert.match(page, /selectSavedPlaceSuggestion/);
+  assert.match(page, /suggestionMapUrl/);
+  assert.match(page, /Saved place location suggestions/);
   assert.match(page, /Grab site image/);
   assert.match(page, /Upload image/);
   assert.match(page, /placeMapUrl/);
