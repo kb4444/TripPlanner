@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Burns Travel",
+    "slug": "burns-travel",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/app-logo.png",
+    "userInterfaceStyle": "light",
+    "jsEngine": "jsc",
+    "scheme": "burnstravel",
+    "splash": {
+      "image": "./assets/app-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#112b28"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kyleburns.burnstravel",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "2"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/app-logo.png",
+        "backgroundColor": "#112b28"
+      },
+      "package": "com.kyleburns.burnstravel"
+    },
+    "extra": {
+      "apiBaseUrl": "https://burns-travel-planner.kyleburns626647.chatgpt.site",
+      "eas": {
+        "projectId": "f76ec46d-df7d-4be1-9522-bbd55fe497a0"
+      }
+    },
+    "owner": "kb4444"
+  }
+}

@@ -46,3 +46,12 @@ next-env.d.ts
 /work/
 *.tar
 *.tar.gz
+
+# mobile app
+apps/mobile/.expo/
+apps/mobile/.expo-shared/
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/dist/
+apps/mobile/dist-check/
+apps/mobile/build/
