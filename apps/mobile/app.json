@@ -2,12 +2,15 @@
   "expo": {
     "name": "Burns Travel",
     "slug": "burns-travel",
-    "version": "0.1.2",
+    "version": "0.1.3",
+    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/app-logo.png",
     "userInterfaceStyle": "light",
-    "jsEngine": "jsc",
     "scheme": "burnstravel",
+    "plugins": [
+      "./plugins/with-ios-fmt-fix"
+    ],
     "splash": {
       "image": "./assets/app-logo.png",
       "resizeMode": "contain",

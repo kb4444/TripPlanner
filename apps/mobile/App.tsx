@@ -261,8 +261,8 @@ function TodayScreen({
 
       <View style={styles.heroCard}>
         <Text style={styles.cardEyebrow}>{activeDay.date}</Text>
-        <Text style={styles.cardTitle}>{activeDay.title}</Text>
-        <Text style={styles.cardBody}>{activeDay.mood}</Text>
+        <Text style={styles.heroCardTitle}>{activeDay.title}</Text>
+        <Text style={styles.heroCardBody}>{activeDay.mood}</Text>
       </View>
 
       <InfoCard title="Weather + gear" body={activeDay.weatherNeed} />
@@ -595,6 +595,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark,
     borderRadius: 22,
     padding: 20,
+  },
+  heroCardBody: {
+    color: "#cfe4df",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  heroCardTitle: {
+    color: "white",
+    fontSize: 23,
+    fontWeight: "800",
+    lineHeight: 28,
+    marginBottom: 8,
   },
   itemDetail: {
     color: colors.muted,
