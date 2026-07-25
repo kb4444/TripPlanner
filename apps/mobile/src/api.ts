@@ -10,10 +10,7 @@ export async function fetchTrips() {
   return (await response.json()) as { trips: TripRecord[] };
 }
 
-export async function saveTripPatch(
-  tripId: string,
-  patch: Partial<Pick<TripRecord, "notes" | "packed">>,
-) {
+export async function saveTripPatch(tripId: string, patch: Partial<Pick<TripRecord, "notes" | "packed" | "data">>) {
   const response = await fetch(`${API_BASE_URL}/api/trips/${encodeURIComponent(tripId)}`, {
     body: JSON.stringify(patch),
     headers: { "content-type": "application/json" },
