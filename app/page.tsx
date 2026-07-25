@@ -72,6 +72,7 @@ type PackingTemplate = {
 };
 
 type Place = {
+  id?: string;
   name: string;
   type: string;
   note: string;
@@ -1357,12 +1358,15 @@ export default function Home() {
     return selectedMatches && (hasVisibleItems || (!normalizedPackingQuery && !showUnpackedOnly));
   });
   const normalizedPlaceQuery = placeQuery.trim().toLowerCase();
-  const visiblePlaces = dataPlaces.filter((place) =>
-    !normalizedPlaceQuery ||
-    (place.name + " " + place.type + " " + place.status + " " + place.note + " " + (place.address ?? "") + " " + (place.website ?? ""))
-      .toLowerCase()
-      .includes(normalizedPlaceQuery),
-  );
+  const visiblePlaces = dataPlaces
+    .map((place, index) => ({ index, place }))
+    .filter(({ index, place }) =>
+      editingPlaceIndex === index ||
+      !normalizedPlaceQuery ||
+      (place.name + " " + place.type + " " + place.status + " " + place.note + " " + (place.address ?? "") + " " + (place.website ?? ""))
+        .toLowerCase()
+        .includes(normalizedPlaceQuery),
+    );
   const packingSuggestions = createPackingSuggestions(tripData, activeTrip);
   const selectedPackingTemplate =
     packingTemplates.find((template) => template.id === selectedPackingTemplateId) ??
@@ -1846,6 +1850,17 @@ export default function Home() {
     return id;
   }
 
+  function uniquePlaceId(places: Place[]) {
+    const existingIds = new Set(places.map((place) => place.id).filter(Boolean));
+    let id = "place-" + Date.now().toString(36);
+    let counter = 1;
+    while (existingIds.has(id)) {
+      counter += 1;
+      id = "place-" + Date.now().toString(36) + "-" + counter;
+    }
+    return id;
+  }
+
   function addChecklistItem(group = "General") {
     const draft = packingDrafts[group] ?? { label: "", note: "" };
     const label = draft.label.replace(/\s+/g, " ").trim();
@@ -2088,7 +2103,17 @@ export default function Home() {
       ...tripData,
       places: [
         ...dataPlaces,
-        { name: "", type: "Idea", status: "Maybe", note: "", address: "", mapUrl: "", website: "", imageUrl: "" },
+        {
+          id: uniquePlaceId(dataPlaces),
+          name: "",
+          type: "Idea",
+          status: "Maybe",
+          note: "",
+          address: "",
+          mapUrl: "",
+          website: "",
+          imageUrl: "",
+        },
       ],
     });
     setEditingPlaceIndex(nextIndex);
@@ -3188,13 +3213,12 @@ export default function Home() {
               </div>
             </section>
             <div className="place-grid">
-              {visiblePlaces.map((place) => {
-                const index = dataPlaces.findIndex((entry) => entry === place);
+              {visiblePlaces.map(({ index, place }) => {
                 const imageUrl = placeImageFor(place, index);
                 const websiteUrl = normalizeExternalUrl(place.website);
                 const isEditingPlace = editingPlaceIndex === index;
                 return (
-                <article className={isEditingPlace ? "place-card is-editing" : "place-card"} key={"place-" + index}>
+                <article className={isEditingPlace ? "place-card is-editing" : "place-card"} key={place.id ?? "place-" + index}>
                   <div
                     className={"place-art art-" + (index % 3)}
                     style={{
