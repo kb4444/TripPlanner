@@ -2,7 +2,7 @@
   "expo": {
     "name": "Burns Travel",
     "slug": "burns-travel",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/app-logo.png",
@@ -22,7 +22,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "9"
+      "buildNumber": "10"
     },
     "android": {
       "adaptiveIcon": {

@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { API_BASE_URL, fetchTrips, mapUrlFor, saveTripPatch } from "./src/api";
+import { API_BASE_URL, fetchTrips, mapUrlFor, mapUrlForCoordinate, saveTripPatch } from "./src/api";
 import { readCachedTripState, writeCachedTripState } from "./src/storage";
 import type { AgendaItem, ChecklistItem, DayPlan, Place, TripRecord } from "./src/types";
 
@@ -25,7 +25,7 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: "menu", label: "Menu" },
 ];
 
-const APP_VERSION = "0.1.4";
+const APP_VERSION = "0.1.5";
 
 export default function App() {
   const [trips, setTrips] = useState<TripRecord[]>([]);
@@ -324,7 +324,7 @@ function AgendaList({
   return (
     <View style={styles.stackSmall}>
       {agenda.map((item, index) => {
-        const mapTarget = item.lat && item.lng ? `${item.lat},${item.lng}` : item.location || item.title;
+        const mapUrl = mapUrlForAgendaItem(item);
         return (
           <View key={item.time + item.title + index} style={styles.timelineRow}>
             <View style={styles.timeRail}>
@@ -334,11 +334,11 @@ function AgendaList({
             <View style={styles.timelineCard}>
               <Text style={styles.itemTitle}>{item.title}</Text>
               <Text style={styles.itemDetail}>{item.detail}</Text>
-              {!compact && (
-                <Pressable onPress={() => onOpenMap(mapUrlFor(mapTarget))} style={styles.linkButton}>
+              {!compact && mapUrl ? (
+                <Pressable onPress={() => onOpenMap(mapUrl)} style={styles.linkButton}>
                   <Text style={styles.linkText}>Open map</Text>
                 </Pressable>
-              )}
+              ) : null}
             </View>
           </View>
         );
@@ -567,6 +567,36 @@ function EmptyState({ body, title }: { body: string; title: string }) {
 
 function normalizeUrl(value: string) {
   return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+function mapUrlForAgendaItem(item: AgendaItem) {
+  const coordinate = validCoordinate(item.lat, item.lng);
+  if (coordinate) {
+    return mapUrlForCoordinate(coordinate.lat, coordinate.lng, item.location || item.title);
+  }
+
+  const location = item.location?.replace(/\s+/g, " ").trim();
+  if (location) {
+    return mapUrlFor(location);
+  }
+
+  return "";
+}
+
+function validCoordinate(lat?: string, lng?: string) {
+  const cleanLat = lat?.trim();
+  const cleanLng = lng?.trim();
+  if (!cleanLat || !cleanLng) return null;
+
+  const latNumber = Number(cleanLat);
+  const lngNumber = Number(cleanLng);
+  if (!Number.isFinite(latNumber) || !Number.isFinite(lngNumber)) return null;
+  if (Math.abs(latNumber) > 90 || Math.abs(lngNumber) > 180) return null;
+
+  return {
+    lat: latNumber.toFixed(6),
+    lng: lngNumber.toFixed(6),
+  };
 }
 
 const colors = {

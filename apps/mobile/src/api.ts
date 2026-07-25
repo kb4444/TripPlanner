@@ -25,5 +25,16 @@ export async function saveTripPatch(
 }
 
 export function mapUrlFor(target: string) {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(target)}`;
+  return `http://maps.apple.com/?q=${encodeURIComponent(cleanMapTarget(target))}`;
+}
+
+export function mapUrlForCoordinate(lat: string, lng: string, label?: string) {
+  const cleanLat = lat.trim();
+  const cleanLng = lng.trim();
+  const query = label?.trim() || `${cleanLat},${cleanLng}`;
+  return `http://maps.apple.com/?ll=${encodeURIComponent(`${cleanLat},${cleanLng}`)}&q=${encodeURIComponent(query)}`;
+}
+
+function cleanMapTarget(target: string) {
+  return target.replace(/\s+/g, " ").trim();
 }
