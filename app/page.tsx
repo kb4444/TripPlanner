@@ -3194,7 +3194,7 @@ export default function Home() {
                 const websiteUrl = normalizeExternalUrl(place.website);
                 const isEditingPlace = editingPlaceIndex === index;
                 return (
-                <article className={isEditingPlace ? "place-card is-editing" : "place-card"} key={place.name + "-" + index}>
+                <article className={isEditingPlace ? "place-card is-editing" : "place-card"} key={"place-" + index}>
                   <div
                     className={"place-art art-" + (index % 3)}
                     style={{
