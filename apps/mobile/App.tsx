@@ -25,7 +25,7 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: "menu", label: "Menu" },
 ];
 
-const APP_VERSION = "0.1.6";
+const APP_VERSION = "0.1.7";
 
 export default function App() {
   const [trips, setTrips] = useState<TripRecord[]>([]);
@@ -432,7 +432,7 @@ export default function App() {
             onPress={() => setActiveTab(tab.key)}
             style={[styles.bottomTabButton, activeTab === tab.key && styles.bottomTabButtonActive]}
           >
-            <View style={[styles.bottomTabDot, activeTab === tab.key && styles.bottomTabDotActive]} />
+            <TabIcon active={activeTab === tab.key} name={tab.key} />
             <Text style={[styles.bottomTabText, activeTab === tab.key && styles.bottomTabTextActive]}>
               {tab.label}
             </Text>
@@ -440,6 +440,58 @@ export default function App() {
         ))}
       </View>
     </SafeAreaView>
+  );
+}
+
+function TabIcon({ active, name }: { active: boolean; name: TabKey }) {
+  const tone = active ? colors.coral : "#a9ccc5";
+
+  if (name === "today") {
+    return (
+      <View style={[styles.iconCalendar, { borderColor: tone }]}>
+        <View style={[styles.iconCalendarTop, { backgroundColor: tone }]} />
+        <View style={styles.iconCalendarDots}>
+          <View style={[styles.iconDotTiny, { backgroundColor: tone }]} />
+          <View style={[styles.iconDotTiny, { backgroundColor: tone }]} />
+        </View>
+      </View>
+    );
+  }
+
+  if (name === "itinerary") {
+    return (
+      <View style={styles.iconRoute}>
+        <View style={[styles.iconRouteDot, { borderColor: tone }]} />
+        <View style={[styles.iconRouteLine, { backgroundColor: tone }]} />
+        <View style={[styles.iconRouteLineShort, { backgroundColor: tone }]} />
+        <View style={[styles.iconRouteDotEnd, { borderColor: tone }]} />
+      </View>
+    );
+  }
+
+  if (name === "packing") {
+    return (
+      <View style={[styles.iconBag, { borderColor: tone }]}>
+        <View style={[styles.iconBagHandle, { borderColor: tone }]} />
+      </View>
+    );
+  }
+
+  if (name === "places") {
+    return (
+      <View style={styles.iconPin}>
+        <View style={[styles.iconPinHead, { borderColor: tone }]} />
+        <View style={[styles.iconPinStem, { backgroundColor: tone }]} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.iconMenu}>
+      <View style={[styles.iconMenuDot, { backgroundColor: tone }]} />
+      <View style={[styles.iconMenuDot, { backgroundColor: tone }]} />
+      <View style={[styles.iconMenuDot, { backgroundColor: tone }]} />
+    </View>
   );
 }
 
@@ -1573,6 +1625,116 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  iconBag: {
+    borderRadius: 5,
+    borderWidth: 2,
+    height: 16,
+    marginTop: 4,
+    width: 19,
+  },
+  iconBagHandle: {
+    alignSelf: "center",
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+    borderWidth: 2,
+    height: 8,
+    marginTop: -7,
+    width: 10,
+  },
+  iconCalendar: {
+    borderRadius: 5,
+    borderWidth: 2,
+    height: 20,
+    overflow: "hidden",
+    width: 20,
+  },
+  iconCalendarDots: {
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "center",
+    marginTop: 5,
+  },
+  iconCalendarTop: {
+    height: 5,
+    width: "100%",
+  },
+  iconDotTiny: {
+    borderRadius: 2,
+    height: 4,
+    width: 4,
+  },
+  iconMenu: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+    height: 20,
+    justifyContent: "center",
+    width: 22,
+  },
+  iconMenuDot: {
+    borderRadius: 3,
+    height: 5,
+    width: 5,
+  },
+  iconPin: {
+    alignItems: "center",
+    height: 21,
+    width: 20,
+  },
+  iconPinHead: {
+    borderRadius: 8,
+    borderWidth: 2,
+    height: 15,
+    width: 15,
+  },
+  iconPinStem: {
+    borderRadius: 2,
+    height: 8,
+    marginTop: -2,
+    transform: [{ rotate: "45deg" }],
+    width: 3,
+  },
+  iconRoute: {
+    height: 21,
+    width: 23,
+  },
+  iconRouteDot: {
+    borderRadius: 5,
+    borderWidth: 2,
+    height: 10,
+    left: 0,
+    position: "absolute",
+    top: 0,
+    width: 10,
+  },
+  iconRouteDotEnd: {
+    borderRadius: 5,
+    borderWidth: 2,
+    bottom: 0,
+    height: 10,
+    position: "absolute",
+    right: 0,
+    width: 10,
+  },
+  iconRouteLine: {
+    borderRadius: 2,
+    height: 3,
+    left: 8,
+    position: "absolute",
+    top: 8,
+    transform: [{ rotate: "25deg" }],
+    width: 12,
+  },
+  iconRouteLineShort: {
+    borderRadius: 2,
+    height: 3,
+    left: 7,
+    position: "absolute",
+    top: 13,
+    transform: [{ rotate: "-25deg" }],
+    width: 12,
   },
   loadingScreen: {
     alignItems: "center",
