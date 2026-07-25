@@ -15,15 +15,17 @@ import { API_BASE_URL, fetchTrips, mapUrlFor, saveTripPatch } from "./src/api";
 import { readCachedTripState, writeCachedTripState } from "./src/storage";
 import type { AgendaItem, ChecklistItem, DayPlan, Place, TripRecord } from "./src/types";
 
-type TabKey = "today" | "itinerary" | "packing" | "places" | "notes";
+type TabKey = "today" | "itinerary" | "packing" | "places" | "menu";
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "itinerary", label: "Plan" },
   { key: "packing", label: "Pack" },
   { key: "places", label: "Places" },
-  { key: "notes", label: "Notes" },
+  { key: "menu", label: "Menu" },
 ];
+
+const APP_VERSION = "0.1.4";
 
 export default function App() {
   const [trips, setTrips] = useState<TripRecord[]>([]);
@@ -143,6 +145,15 @@ export default function App() {
     }
   }
 
+  async function selectTrip(tripId: string) {
+    const selectedTrip = trips.find((trip) => trip.id === tripId);
+    setActiveTripId(tripId);
+    setActiveDayIndex(0);
+    setActiveTab("today");
+    setNotesDraft(selectedTrip?.notes ?? "");
+    await cacheTrips(trips, tripId);
+  }
+
   function openUrl(url: string) {
     Linking.openURL(url).catch(() => Alert.alert("Could not open link", url));
   }
@@ -180,20 +191,6 @@ export default function App() {
         <Text style={styles.statusText}>{lastSync ? `Updated ${lastSync}` : API_BASE_URL.replace("https://", "")}</Text>
       </View>
 
-      <View style={styles.tabs}>
-        {tabs.map((tab) => (
-          <Pressable
-            key={tab.key}
-            onPress={() => setActiveTab(tab.key)}
-            style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}
-          >
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-              {tab.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.content}
       >
@@ -218,9 +215,37 @@ export default function App() {
         ) : activeTab === "places" ? (
           <PlacesScreen onOpenUrl={openUrl} places={activeTrip.data.places} />
         ) : (
-          <NotesScreen notesDraft={notesDraft} onChange={setNotesDraft} onSave={saveNotes} />
+          <MenuScreen
+            activeTripId={activeTrip.id}
+            appVersion={APP_VERSION}
+            lastSync={lastSync}
+            notesDraft={notesDraft}
+            onChangeNotes={setNotesDraft}
+            onOpenPlanner={() => openUrl(API_BASE_URL)}
+            onRefresh={refreshTrips}
+            onSaveNotes={saveNotes}
+            onSelectTrip={selectTrip}
+            packingProgress={packingProgress}
+            status={status}
+            trips={trips}
+          />
         )}
       </ScrollView>
+
+      <View style={styles.bottomTabs}>
+        {tabs.map((tab) => (
+          <Pressable
+            key={tab.key}
+            onPress={() => setActiveTab(tab.key)}
+            style={[styles.bottomTabButton, activeTab === tab.key && styles.bottomTabButtonActive]}
+          >
+            <View style={[styles.bottomTabDot, activeTab === tab.key && styles.bottomTabDotActive]} />
+            <Text style={[styles.bottomTabText, activeTab === tab.key && styles.bottomTabTextActive]}>
+              {tab.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
     </SafeAreaView>
   );
 }
@@ -389,6 +414,108 @@ function PlacesScreen({ onOpenUrl, places }: { onOpenUrl: (url: string) => void;
   );
 }
 
+function MenuScreen({
+  activeTripId,
+  appVersion,
+  lastSync,
+  notesDraft,
+  onChangeNotes,
+  onOpenPlanner,
+  onRefresh,
+  onSaveNotes,
+  onSelectTrip,
+  packingProgress,
+  status,
+  trips,
+}: {
+  activeTripId: string;
+  appVersion: string;
+  lastSync: string;
+  notesDraft: string;
+  onChangeNotes: (value: string) => void;
+  onOpenPlanner: () => void;
+  onRefresh: () => Promise<void>;
+  onSaveNotes: () => void;
+  onSelectTrip: (tripId: string) => void;
+  packingProgress: number;
+  status: string;
+  trips: TripRecord[];
+}) {
+  const activeTrip = trips.find((trip) => trip.id === activeTripId) ?? trips[0] ?? null;
+
+  return (
+    <View style={styles.stack}>
+      <View style={styles.menuHero}>
+        <Text style={styles.cardEyebrow}>Current trip</Text>
+        <Text style={styles.menuHeroTitle}>{activeTrip?.title ?? "No active trip"}</Text>
+        <Text style={styles.menuHeroBody}>
+          {activeTrip?.destination ?? "Open the web planner to create a trip."}
+          {activeTrip?.dateRange ? ` · ${activeTrip.dateRange}` : ""}
+        </Text>
+        <View style={styles.menuStatsRow}>
+          <View style={styles.menuStat}>
+            <Text style={styles.menuStatValue}>{trips.length}</Text>
+            <Text style={styles.menuStatLabel}>trips</Text>
+          </View>
+          <View style={styles.menuStat}>
+            <Text style={styles.menuStatValue}>{packingProgress}%</Text>
+            <Text style={styles.menuStatLabel}>packed</Text>
+          </View>
+          <View style={styles.menuStat}>
+            <Text style={styles.menuStatValue}>{lastSync || "--"}</Text>
+            <Text style={styles.menuStatLabel}>sync</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardEyebrow}>Switch trips</Text>
+        <Text style={styles.cardTitle}>Choose the trip you want on this phone.</Text>
+        <View style={styles.stackSmall}>
+          {trips.map((trip) => {
+            const isActive = trip.id === activeTripId;
+            return (
+              <Pressable
+                key={trip.id}
+                onPress={() => onSelectTrip(trip.id)}
+                style={[styles.tripRow, isActive && styles.tripRowActive]}
+              >
+                <View style={styles.tripRowCopy}>
+                  <Text style={[styles.tripRowTitle, isActive && styles.tripRowTitleActive]}>
+                    {trip.title}
+                  </Text>
+                  <Text style={[styles.tripRowMeta, isActive && styles.tripRowMetaActive]}>
+                    {trip.destination} · {trip.dateRange}
+                  </Text>
+                </View>
+                <Text style={[styles.tripRowAction, isActive && styles.tripRowActionActive]}>
+                  {isActive ? "Active" : "Use"}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardEyebrow}>Sync + planner</Text>
+        <Text style={styles.cardBody}>{status}</Text>
+        <View style={styles.menuActionGrid}>
+          <Pressable onPress={() => void onRefresh()} style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>Refresh trips</Text>
+          </Pressable>
+          <Pressable onPress={onOpenPlanner} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Open web planner</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.versionText}>Burns Travel iOS {appVersion}</Text>
+      </View>
+
+      <NotesScreen notesDraft={notesDraft} onChange={onChangeNotes} onSave={onSaveNotes} />
+    </View>
+  );
+}
+
 function NotesScreen({
   notesDraft,
   onChange,
@@ -473,6 +600,45 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginBottom: 20,
   },
+  bottomTabButton: {
+    alignItems: "center",
+    borderRadius: 16,
+    flex: 1,
+    gap: 5,
+    justifyContent: "center",
+    minHeight: 54,
+    paddingVertical: 7,
+  },
+  bottomTabButtonActive: {
+    backgroundColor: "#1a443e",
+  },
+  bottomTabDot: {
+    backgroundColor: "transparent",
+    borderRadius: 3,
+    height: 5,
+    width: 18,
+  },
+  bottomTabDotActive: {
+    backgroundColor: colors.coral,
+  },
+  bottomTabText: {
+    color: "#a9ccc5",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  bottomTabTextActive: {
+    color: "white",
+  },
+  bottomTabs: {
+    backgroundColor: colors.dark,
+    borderTopColor: "#1d4640",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
   card: {
     backgroundColor: colors.card,
     borderColor: "#eadfd0",
@@ -533,7 +699,7 @@ const styles = StyleSheet.create({
   content: {
     gap: 16,
     padding: 16,
-    paddingBottom: 42,
+    paddingBottom: 28,
   },
   dayPill: {
     backgroundColor: "white",
@@ -655,6 +821,55 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginTop: 14,
   },
+  menuActionGrid: {
+    gap: 10,
+    marginTop: 14,
+  },
+  menuHero: {
+    backgroundColor: colors.dark,
+    borderColor: "#24534c",
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 20,
+  },
+  menuHeroBody: {
+    color: "#cfe4df",
+    fontSize: 15,
+    fontWeight: "600",
+    lineHeight: 22,
+  },
+  menuHeroTitle: {
+    color: "white",
+    fontSize: 27,
+    fontWeight: "900",
+    lineHeight: 32,
+    marginBottom: 8,
+  },
+  menuStat: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.14)",
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    padding: 12,
+  },
+  menuStatLabel: {
+    color: "#9fc6bf",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 2,
+    textTransform: "uppercase",
+  },
+  menuStatValue: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  menuStatsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+  },
   notesInput: {
     backgroundColor: "white",
     borderColor: colors.line,
@@ -676,6 +891,17 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "white",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  secondaryButton: {
+    alignItems: "center",
+    backgroundColor: colors.mint,
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  secondaryButtonText: {
+    color: colors.teal,
     fontSize: 15,
     fontWeight: "900",
   },
@@ -779,5 +1005,56 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     lineHeight: 27,
     maxWidth: 250,
+  },
+  tripRow: {
+    alignItems: "center",
+    backgroundColor: "white",
+    borderColor: colors.line,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    padding: 14,
+  },
+  tripRowAction: {
+    color: colors.teal,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  tripRowActionActive: {
+    color: "white",
+  },
+  tripRowActive: {
+    backgroundColor: colors.teal,
+    borderColor: colors.teal,
+  },
+  tripRowCopy: {
+    flex: 1,
+  },
+  tripRowMeta: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  tripRowMetaActive: {
+    color: "#d6eee8",
+  },
+  tripRowTitle: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 21,
+    marginBottom: 3,
+  },
+  tripRowTitleActive: {
+    color: "white",
+  },
+  versionText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 12,
+    textAlign: "center",
   },
 });
