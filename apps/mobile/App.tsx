@@ -4,11 +4,9 @@ import {
   Alert,
   Linking,
   Pressable,
-  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  StatusBar,
   Text,
   TextInput,
   View,
@@ -34,7 +32,6 @@ export default function App() {
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [notesDraft, setNotesDraft] = useState("");
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState("Loading trip...");
   const [lastSync, setLastSync] = useState("");
 
@@ -65,7 +62,6 @@ export default function App() {
   }, []);
 
   const refreshTrips = useCallback(async () => {
-    setRefreshing(true);
     try {
       const payload = await fetchTrips();
       const selected =
@@ -82,7 +78,6 @@ export default function App() {
       setStatus("Offline cache active");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [activeTripId, cacheTrips]);
 
@@ -155,7 +150,6 @@ export default function App() {
   if (loading && !activeTrip) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" />
         <View style={styles.loadingScreen}>
           <Text style={styles.brand}>Burns Travel</Text>
           <ActivityIndicator color="#ec7357" />
@@ -167,7 +161,6 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
       <View style={styles.header}>
         <View>
           <Text style={styles.kicker}>Family trip mode</Text>
@@ -203,7 +196,6 @@ export default function App() {
 
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshTrips} tintColor="#ec7357" />}
       >
         {!activeTrip ? (
           <EmptyState title="No trip found" body="Pull to refresh once the hosted planner is available." />
